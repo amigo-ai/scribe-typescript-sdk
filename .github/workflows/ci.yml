@@ -30,7 +30,7 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: Build (esbuild CJS/ESM + tsc types)
+      - name: Build (esbuild ESM + tsc types)
         run: npm run build
 
       - name: Run unit tests

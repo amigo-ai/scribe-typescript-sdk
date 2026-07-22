@@ -12,18 +12,12 @@ const shared = {
   sourcemap: true,
 }
 
-// ESM build
+// ESM-only build — the package is `"type": "module"` and ships a single ESM
+// entry point (no CommonJS output).
 await build({
   ...shared,
   outfile: 'dist/index.mjs',
   format: 'esm',
 })
 
-// CJS build
-await build({
-  ...shared,
-  outfile: 'dist/index.cjs',
-  format: 'cjs',
-})
-
-console.log('✨ Esbuild complete (ESM + CJS)')
+console.log('✨ Esbuild complete (ESM)')

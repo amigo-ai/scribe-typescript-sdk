@@ -5,8 +5,7 @@
   "publishConfig": {
     "access": "public"
   },
-  "main": "./dist/index.cjs",
-  "module": "./dist/index.mjs",
+  "main": "./dist/index.mjs",
   "types": "./dist/types/index.d.ts",
   "files": [
     "dist"
@@ -14,6 +13,7 @@
   "scripts": {
     "build": "node scripts/build.mjs && tsc --project tsconfig.build.json",
     "dev": "node scripts/build.mjs --watch",
+    "generate:schema": "openapi-typescript openapi/scribe.json -o src/generated/openapi.ts",
     "test": "vitest run --project unit",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage --project unit",
@@ -27,8 +27,7 @@
   "exports": {
     ".": {
       "types": "./dist/types/index.d.ts",
-      "import": "./dist/index.mjs",
-      "require": "./dist/index.cjs"
+      "import": "./dist/index.mjs"
     },
     "./package.json": "./package.json"
   },
@@ -55,6 +54,7 @@
     "eslint": "^9.32.0",
     "eslint-config-prettier": "^10.1.8",
     "globals": "^16.3.0",
+    "openapi-typescript": "^7.13.0",
     "prettier": "^3.6.2",
     "typescript": "^5.9.2",
     "vitest": "^3.2.4"

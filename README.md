@@ -82,15 +82,25 @@ with `retryAfterSeconds`). Transport failures throw `NetworkError`.
 
 ```bash
 npm install
-npm run build     # esbuild dual CJS/ESM + tsc --emitDeclarationOnly (.d.ts)
+npm run generate:schema  # regenerate src/generated/openapi.ts from openapi/scribe.json
+npm run build            # esbuild (ESM) + tsc --emitDeclarationOnly (.d.ts)
 npm run lint
-npm test          # unit tests (mocked transport)
-npm run test:e2e  # gated E2E — see tests/e2e/README.md (skips without creds)
+npm test                 # unit tests (mocked transport)
+npm run test:e2e         # gated E2E — see tests/e2e/README.md (skips without creds)
 ```
 
-Packaging mirrors [`amigo-typescript-sdk`](https://github.com/amigo-ai/amigo-typescript-sdk):
-dual CJS/ESM via esbuild plus `tsc --emitDeclarationOnly` for types, exported
-through the `exports` map (`types`/`import`/`require`).
+**Packaging.** The SDK is **ESM-only** (`"type": "module"`): a single ESM entry
+point (`dist/index.mjs`) built with esbuild plus `tsc --emitDeclarationOnly` for
+the `.d.ts` types, exported through the `exports` map (`types`/`import`). There is
+no CommonJS build.
+
+**Wire types.** The REST wire types in `src/types.ts` are derived from the Scribe
+service's **production OpenAPI document**
+(`https://scribe.platform.amigo.ai/v1/openapi.json`, vendored at
+`openapi/scribe.json`) via [`openapi-typescript`](https://github.com/openapi-ts/openapi-typescript).
+Run `npm run generate:schema` to refresh `src/generated/openapi.ts` after the API
+schema changes (the generated file is committed so the build needs no network).
+The generated module is types-only — nothing is added to the runtime bundle.
 
 ## License
 

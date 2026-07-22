@@ -1,3 +1,7 @@
 dist
 node_modules
 coverage
+# Auto-generated from the Scribe OpenAPI spec (npm run generate:schema)
+src/generated
+# Vendored upstream OpenAPI document (fetched verbatim from production)
+openapi
