@@ -1,0 +1,63 @@
+{
+  "name": "@amigo-ai/scribe",
+  "version": "0.0.0",
+  "description": "Framework-agnostic TypeScript SDK for the Amigo Scribe streaming service",
+  "publishConfig": {
+    "access": "public"
+  },
+  "main": "./dist/index.mjs",
+  "types": "./dist/types/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "node scripts/build.mjs && tsc --project tsconfig.build.json",
+    "dev": "node scripts/build.mjs --watch",
+    "openapi:sync": "node scripts/sync-openapi.mjs",
+    "generate:schema": "openapi-typescript openapi/scribe.json -o src/generated/openapi.ts",
+    "test": "vitest run --project unit",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage --project unit",
+    "test:e2e": "vitest run --project e2e",
+    "format": "prettier --check .",
+    "format:write": "prettier --write .",
+    "lint": "eslint 'src/**/*.{ts,tsx}' --max-warnings 0",
+    "lint:fix": "eslint 'src/**/*.{ts,tsx}' --fix",
+    "pack:local": "npm run build && rm -rf artifacts && mkdir -p artifacts && TARBALL=$(npm pack) && mv \"$TARBALL\" artifacts/ && echo Packed: artifacts/$TARBALL"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/types/index.d.ts",
+      "import": "./dist/index.mjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "type": "module",
+  "sideEffects": false,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/amigo-ai/scribe-typescript-sdk.git"
+  },
+  "author": "Amigo AI",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/amigo-ai/scribe-typescript-sdk/issues"
+  },
+  "homepage": "https://github.com/amigo-ai/scribe-typescript-sdk#readme",
+  "devDependencies": {
+    "@eslint/js": "^9.32.0",
+    "@types/node": "^24.2.0",
+    "@typescript-eslint/eslint-plugin": "^8.39.0",
+    "@typescript-eslint/parser": "^8.39.0",
+    "@vitest/coverage-v8": "^3.2.4",
+    "dotenv": "^17.2.1",
+    "esbuild": "^0.25.8",
+    "eslint": "^9.32.0",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^16.3.0",
+    "openapi-typescript": "^7.13.0",
+    "prettier": "^3.6.2",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  }
+}

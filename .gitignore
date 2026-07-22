@@ -1,0 +1,58 @@
+############################################
+#  Core Node / TypeScript build artifacts  #
+############################################
+node_modules/
+/dist/
+build/
+*.tsbuildinfo
+.eslintcache
+.nyc_output/
+coverage/
+*.log
+*.log.*
+
+############################################
+#  Environment & secrets                   #
+############################################
+.env
+.env.local
+.env.*.local
+
+############################################
+#  Editor / IDE cruft                      #
+############################################
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/tasks.json
+
+.idea/
+
+*.sublime*
+*.swp
+*.swo
+
+############################################
+#  Temporary tooling caches                #
+############################################
+.pnpm-debug.log
+
+# esbuild metadata file (when enabled)
+esbuild.metadata.json
+
+# Optional: test snapshots
+__snapshots__/
+
+# Local tarballs
+artifacts/
+*.tgz

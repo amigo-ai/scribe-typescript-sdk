@@ -1,0 +1,100 @@
+name: Release
+
+# Present but NOT yet active. First npm publish of @amigo-ai/scribe is a later
+# phase of the scribe-streaming plan (SDK phase 17). This workflow is
+# manual-dispatch only and mirrors amigo-typescript-sdk's publish arrangement
+# (GitHub App token for the version-bump commit + NPM_TOKEN for publish).
+#
+# Before first use, provision org/repo secrets: RELEASE_BOT_APP_ID,
+# RELEASE_BOT_PRIVATE_KEY, NPM_TOKEN. Provenance is emitted only when the repo
+# is public (currently private).
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_type:
+        description: 'Version increment type'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+      dry_run:
+        description: 'Dry run (skip publish, commits, tags)'
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.RELEASE_BOT_APP_ID }}
+          private-key: ${{ secrets.RELEASE_BOT_PRIVATE_KEY }}
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint, build, test
+        run: |
+          npm run lint
+          npm run build
+          npm test -- --reporter=dot
+
+      - name: Configure git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Increment version
+        id: new_version
+        run: |
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            NEW_VERSION=$(npm version ${{ inputs.version_type }} --no-git-tag-version --dry-run)
+            echo "version=${NEW_VERSION#v}" >> $GITHUB_OUTPUT
+          else
+            npm version ${{ inputs.version_type }} --no-git-tag-version
+            echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Publish to npm
+        if: ${{ !inputs.dry_run }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          PROV_FLAG=""
+          if [ "${{ github.repository_visibility }}" = "public" ]; then
+            PROV_FLAG="--provenance"
+          fi
+          npm publish $PROV_FLAG --access public
+
+      - name: Commit version bump + tag
+        if: ${{ !inputs.dry_run }}
+        run: |
+          git add package.json package-lock.json || true
+          git commit -m "Release v${{ steps.new_version.outputs.version }}"
+          git tag -a "v${{ steps.new_version.outputs.version }}" -m "Release v${{ steps.new_version.outputs.version }}"
+          git push origin HEAD --tags
