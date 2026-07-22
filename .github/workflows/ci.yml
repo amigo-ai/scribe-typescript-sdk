@@ -24,6 +24,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Fails the PR if src/generated/openapi.ts is stale w.r.t. the vendored
+      # spec (openapi/scribe.json). Refresh with `npm run openapi:sync` then
+      # `npm run generate:schema` and commit the result.
+      - name: Verify generated API types are committed
+        run: |
+          npm run generate:schema
+          git diff --exit-code -- src/generated/openapi.ts
+
       - name: Format check
         run: npm run format
 

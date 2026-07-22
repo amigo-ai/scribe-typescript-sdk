@@ -13,6 +13,7 @@
   "scripts": {
     "build": "node scripts/build.mjs && tsc --project tsconfig.build.json",
     "dev": "node scripts/build.mjs --watch",
+    "openapi:sync": "node scripts/sync-openapi.mjs",
     "generate:schema": "openapi-typescript openapi/scribe.json -o src/generated/openapi.ts",
     "test": "vitest run --project unit",
     "test:watch": "vitest",

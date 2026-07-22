@@ -82,6 +82,7 @@ with `retryAfterSeconds`). Transport failures throw `NetworkError`.
 
 ```bash
 npm install
+npm run openapi:sync     # refresh openapi/scribe.json from production (network)
 npm run generate:schema  # regenerate src/generated/openapi.ts from openapi/scribe.json
 npm run build            # esbuild (ESM) + tsc --emitDeclarationOnly (.d.ts)
 npm run lint
@@ -98,9 +99,20 @@ no CommonJS build.
 service's **production OpenAPI document**
 (`https://scribe.platform.amigo.ai/v1/openapi.json`, vendored at
 `openapi/scribe.json`) via [`openapi-typescript`](https://github.com/openapi-ts/openapi-typescript).
-Run `npm run generate:schema` to refresh `src/generated/openapi.ts` after the API
-schema changes (the generated file is committed so the build needs no network).
-The generated module is types-only — nothing is added to the runtime bundle.
+To refresh types after the API schema changes:
+
+```bash
+npm run openapi:sync     # re-fetch the spec into openapi/scribe.json
+npm run generate:schema  # regenerate src/generated/openapi.ts from that snapshot
+```
+
+Both `openapi/scribe.json` and the generated `src/generated/openapi.ts` are
+committed so the build needs no network. CI runs `generate:schema` and fails the
+PR if `src/generated/openapi.ts` is out of sync with the vendored spec (the
+"Verify generated API types are committed" step). `openapi:sync` accepts
+`--url <https url>` or `--spec <local file>` overrides; the default source is the
+production URL. The generated module is types-only — nothing is added to the
+runtime bundle.
 
 ## License
 
