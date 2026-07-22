@@ -144,7 +144,7 @@ export class ScribeClient {
       query.limit = params.limit
     }
     if (params.continuation_token !== undefined) {
-      query.continuation_token = params.continuation_token as string
+      query.continuation_token = params.continuation_token
     }
     return this.http.request<SessionListResponse>({
       method: 'GET',

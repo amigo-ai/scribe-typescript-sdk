@@ -62,9 +62,15 @@ export type ErrorResponseBody = Schemas['ErrorResponse']
 /**
  * Query params for {@link ScribeClient.listSessions} — `limit` (page size) and
  * `continuation_token` (opaque cursor from a prior page's response). Both
- * optional; typed directly from the generated `list-sessions` operation.
+ * optional; derived from the generated `list-sessions` operation. The
+ * generated `continuation_token` is `unknown` (the spec gives it no type), so
+ * it is narrowed to `string` here — the cursor is always the opaque string a
+ * prior {@link SessionListResponse.continuation_token} handed back.
  */
-export type ListSessionsParams = NonNullable<operations['list-sessions']['parameters']['query']>
+export type ListSessionsParams = Omit<
+  NonNullable<operations['list-sessions']['parameters']['query']>,
+  'continuation_token'
+> & { continuation_token?: string }
 
 /**
  * Response from list-sessions (`SessionListResponse`).

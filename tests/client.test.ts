@@ -387,7 +387,10 @@ describe('generateChecklist', () => {
     const { fetch, calls } = mockFetch([{ status: 200, body: generated }])
     const result = await client(fetch).generateChecklist('sess-1', {
       title: 'Intake',
-      items: ['vitals', 'allergies'],
+      items: [
+        { id: 'vitals', label: 'Vitals' },
+        { id: 'allergies', label: 'Allergies' },
+      ],
     })
 
     expect(result).toEqual(generated)
@@ -397,22 +400,28 @@ describe('generateChecklist', () => {
     expect(headers['Content-Type']).toBe('application/json')
     expect(JSON.parse(String(calls[0]!.init?.body))).toEqual({
       title: 'Intake',
-      items: ['vitals', 'allergies'],
+      items: [
+        { id: 'vitals', label: 'Vitals' },
+        { id: 'allergies', label: 'Allergies' },
+      ],
     })
   })
 
   it('maps 404 to NotFoundError', async () => {
     const { fetch } = mockFetch([{ status: 404, body: { message: 'no session' } }])
-    await expect(client(fetch).generateChecklist('nope', { items: ['x'] })).rejects.toBeInstanceOf(
-      NotFoundError
-    )
+    await expect(
+      client(fetch).generateChecklist('nope', {
+        title: 'Intake',
+        items: [{ id: 'x', label: 'X' }],
+      })
+    ).rejects.toBeInstanceOf(NotFoundError)
   })
 
   it('requires a sessionId', async () => {
     const { fetch } = mockFetch([{}])
-    await expect(client(fetch).generateChecklist('', { items: ['x'] })).rejects.toBeInstanceOf(
-      ConfigurationError
-    )
+    await expect(
+      client(fetch).generateChecklist('', { title: 'Intake', items: [{ id: 'x', label: 'X' }] })
+    ).rejects.toBeInstanceOf(ConfigurationError)
   })
 })
 
