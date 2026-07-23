@@ -143,7 +143,10 @@ export class ScribeClient {
     if (params.limit !== undefined) {
       query.limit = params.limit
     }
-    if (params.continuation_token !== undefined) {
+    // Skip a null/absent cursor (the server returns `null` on the last page) so
+    // it is never serialized as the literal string "null"; a real cursor
+    // (string or number) is stringified by the query builder.
+    if (params.continuation_token != null) {
       query.continuation_token = params.continuation_token
     }
     return this.http.request<SessionListResponse>({

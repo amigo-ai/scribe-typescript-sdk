@@ -190,6 +190,27 @@ describe('listSessions', () => {
     expect(calls[0]!.url).toBe(`${BASE}/v1/${WS}/sessions?limit=5`)
   })
 
+  it('threads a numeric continuation_token from a prior page back in without a cast', async () => {
+    // Staging returns `continuation_token` as a number; the narrowed types let
+    // a prior page's token thread straight back in (no cast), and the client
+    // stringifies it into the query.
+    const { fetch, calls } = mockFetch([
+      { status: 200, body: { items: [{ id: 'a' }], has_more: true, continuation_token: 2 } },
+      { status: 200, body: { items: [{ id: 'b' }], has_more: false, continuation_token: null } },
+    ])
+    const c = client(fetch)
+    const first = await c.listSessions({ limit: 2 })
+    // No cast: first.continuation_token is `string | number | null`.
+    await c.listSessions({ limit: 2, continuation_token: first.continuation_token })
+    expect(calls[1]!.url).toBe(`${BASE}/v1/${WS}/sessions?limit=2&continuation_token=2`)
+  })
+
+  it('omits a null continuation_token (last page) instead of serializing "null"', async () => {
+    const { fetch, calls } = mockFetch([{ status: 200, body: { items: [], has_more: false } }])
+    await client(fetch).listSessions({ limit: 2, continuation_token: null })
+    expect(calls[0]!.url).toBe(`${BASE}/v1/${WS}/sessions?limit=2`)
+  })
+
   it('maps 403 to PermissionError', async () => {
     const { fetch } = mockFetch([{ status: 403, body: { message: 'wrong workspace' } }])
     await expect(client(fetch).listSessions()).rejects.toBeInstanceOf(PermissionError)

@@ -64,22 +64,32 @@ export type ErrorResponseBody = Schemas['ErrorResponse']
  * `continuation_token` (opaque cursor from a prior page's response). Both
  * optional; derived from the generated `list-sessions` operation. The
  * generated `continuation_token` is `unknown` (the spec gives it no type), so
- * it is narrowed to `string` here — the cursor is always the opaque string a
- * prior {@link SessionListResponse.continuation_token} handed back.
+ * it is narrowed to `string | number | null` here — staging returns the cursor
+ * as a number (and `null` when there is no next page), matching the narrowed
+ * {@link SessionListResponse.continuation_token}. This lets a prior page's
+ * `continuation_token` be threaded straight back in without a cast; the client
+ * stringifies a real cursor into the query and skips a `null`/absent one.
  */
 export type ListSessionsParams = Omit<
   NonNullable<operations['list-sessions']['parameters']['query']>,
   'continuation_token'
-> & { continuation_token?: string }
+> & { continuation_token?: string | number | null }
 
 /**
  * Response from list-sessions (`SessionListResponse`).
  *
  * `items` is a page of {@link SessionResponse}; `has_more` signals whether
- * another page exists; `continuation_token` (when present) is the cursor to
- * pass back as {@link ListSessionsParams.continuation_token} for the next page.
+ * another page exists; `continuation_token` is the cursor to pass back as
+ * {@link ListSessionsParams.continuation_token} for the next page (a number on
+ * staging), or `null` when there is no next page.
+ *
+ * The generated `continuation_token` is `unknown`; it is narrowed here to
+ * `string | number | null` so a prior page's token threads back into
+ * {@link ScribeClient.listSessions} without a cast.
  */
-export type SessionListResponse = Schemas['SessionListResponse']
+export type SessionListResponse = Omit<Schemas['SessionListResponse'], 'continuation_token'> & {
+  continuation_token?: string | number | null
+}
 
 /** Metadata describing a single model generation (`GenerationMetadata`). */
 export type GenerationMetadata = Schemas['GenerationMetadata']
