@@ -10,7 +10,7 @@
  * the flat, ergonomic public type names the SDK exposes.
  */
 
-import type { components } from './generated/openapi'
+import type { components, operations } from './generated/openapi'
 
 type Schemas = components['schemas']
 
@@ -58,3 +58,74 @@ export type TranscriptResponse = Schemas['TranscriptResponse']
 
 /** Error body shape returned by the scribe service for non-2xx responses. */
 export type ErrorResponseBody = Schemas['ErrorResponse']
+
+/**
+ * Query params for {@link ScribeClient.listSessions} — `limit` (page size) and
+ * `continuation_token` (opaque cursor from a prior page's response). Both
+ * optional; derived from the generated `list-sessions` operation. The
+ * generated `continuation_token` is `unknown` (the spec gives it no type), so
+ * it is narrowed to `string | number | null` here — staging returns the cursor
+ * as a number (and `null` when there is no next page), matching the narrowed
+ * {@link SessionListResponse.continuation_token}. This lets a prior page's
+ * `continuation_token` be threaded straight back in without a cast; the client
+ * stringifies a real cursor into the query and skips a `null`/absent one.
+ */
+export type ListSessionsParams = Omit<
+  NonNullable<operations['list-sessions']['parameters']['query']>,
+  'continuation_token'
+> & { continuation_token?: string | number | null }
+
+/**
+ * Response from list-sessions (`SessionListResponse`).
+ *
+ * `items` is a page of {@link SessionResponse}; `has_more` signals whether
+ * another page exists; `continuation_token` is the cursor to pass back as
+ * {@link ListSessionsParams.continuation_token} for the next page (a number on
+ * staging), or `null` when there is no next page.
+ *
+ * The generated `continuation_token` is `unknown`; it is narrowed here to
+ * `string | number | null` so a prior page's token threads back into
+ * {@link ScribeClient.listSessions} without a cast.
+ */
+export type SessionListResponse = Omit<Schemas['SessionListResponse'], 'continuation_token'> & {
+  continuation_token?: string | number | null
+}
+
+/** Metadata describing a single model generation (`GenerationMetadata`). */
+export type GenerationMetadata = Schemas['GenerationMetadata']
+
+/** A session's clinical note (`NoteResponse`). */
+export type NoteResponse = Schemas['NoteResponse']
+
+/** Request body for {@link ScribeClient.generateNote} (`GenerateNoteRequest`). All fields optional. */
+export type GenerateNoteRequest = Schemas['GenerateNoteRequest']
+
+/** Response from generate-note (`GeneratedNoteResponse`) — the note plus its generation metadata. */
+export type GeneratedNoteResponse = Schemas['GeneratedNoteResponse']
+
+/** Response from finalize-note (`FinalizeNoteResponse`) — the signed/finalized note. */
+export type FinalizeNoteResponse = Schemas['FinalizeNoteResponse']
+
+/** A session's summary (`SummaryResponse`). */
+export type SummaryResponse = Schemas['SummaryResponse']
+
+/** Response from generate-summary (`GeneratedSummaryResponse`) — the summary plus its generation metadata. */
+export type GeneratedSummaryResponse = Schemas['GeneratedSummaryResponse']
+
+/** A single checklist item (`ChecklistItemResponse`). */
+export type ChecklistItemResponse = Schemas['ChecklistItemResponse']
+
+/** A session's checklist (`ChecklistResponse`). */
+export type ChecklistResponse = Schemas['ChecklistResponse']
+
+/** Request body for {@link ScribeClient.generateChecklist} (`GenerateChecklistRequest`). `items` is required. */
+export type GenerateChecklistRequest = Schemas['GenerateChecklistRequest']
+
+/** Response from generate-checklist (`GeneratedChecklistResponse`) — the checklist plus its generation metadata. */
+export type GeneratedChecklistResponse = Schemas['GeneratedChecklistResponse']
+
+/** A single suggested code (`CodeSuggestionResponse`). */
+export type CodeSuggestionResponse = Schemas['CodeSuggestionResponse']
+
+/** Response from get-codes (`CodesResponse`) — the session's suggested billing/clinical codes. */
+export type CodesResponse = Schemas['CodesResponse']

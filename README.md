@@ -2,11 +2,27 @@
 
 Framework-agnostic TypeScript SDK for the Amigo **Scribe** streaming service.
 
-This first release ships the **CRUD REST client** for the session lifecycle:
+This release ships the **CRUD REST client** for the full session lifecycle and
+its per-session artifacts:
+
+Session lifecycle:
 
 - `createSession` — `POST /v1/{workspace_id}/sessions`
 - `allocate` — `POST /v1/{workspace_id}/sessions/{session_id}/allocate` → `{ host, expires_at }`
+- `listSessions` — `GET /v1/{workspace_id}/sessions` (cursor-paginated: `limit`, `continuation_token`)
+- `getSession` — `GET /v1/{workspace_id}/sessions/{session_id}`
 - `getTranscript` — `GET /v1/{workspace_id}/sessions/{session_id}/transcript`
+
+Artifacts (note / summary / checklist / codes):
+
+- `getNote` — `GET /v1/{workspace_id}/sessions/{session_id}/note`
+- `generateNote` — `POST /v1/{workspace_id}/sessions/{session_id}/note`
+- `finalizeNote` — `POST /v1/{workspace_id}/sessions/{session_id}/note/finalize`
+- `getSummary` — `GET /v1/{workspace_id}/sessions/{session_id}/summary`
+- `generateSummary` — `POST /v1/{workspace_id}/sessions/{session_id}/summary`
+- `getChecklist` — `GET /v1/{workspace_id}/sessions/{session_id}/checklist`
+- `generateChecklist` — `POST /v1/{workspace_id}/sessions/{session_id}/checklist`
+- `getCodes` — `GET /v1/{workspace_id}/sessions/{session_id}/codes`
 
 The browser-side WebSocket recorder (`ScribeRecorder` — PCM16 capture,
 reconnect, keepalive) is **not** in this release; it is a later addition. The
@@ -14,8 +30,9 @@ package is browser-first (esbuild `platform: 'neutral'`, `lib` = `ES2022`+`DOM`,
 no Node-only imports) but the REST client runs anywhere `fetch` exists.
 
 > Scribe sessions follow **REST-create → REST-allocate → WS-attach**: create a
-> session, allocate a streaming host, then attach a WebSocket to `host`. Only
-> create + allocate + transcript are covered here.
+> session, allocate a streaming host, then attach a WebSocket to `host`. After
+> the session ends, read the transcript and the generated artifacts (note,
+> summary, checklist, codes) via the REST client covered here.
 
 ## Install
 
