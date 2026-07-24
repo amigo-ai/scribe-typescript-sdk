@@ -1,20 +1,22 @@
 name: Release
 
 # Publishes @amigo-ai/scribe to npm. Mirrors amigo-platform-typescript-sdk's
-# publish.yml: versioning is a manual, separate step (bump package.json, tag
-# v<major>.<minor>.<patch>, and cut a GitHub Release); THIS workflow only
-# validates + publishes the tagged commit. See README "Versioning & releases".
+# publish arrangement: versioning is a manual, separate step (bump package.json,
+# tag v<major>.<minor>.<patch>, and cut a GitHub Release); THIS workflow only
+# validates + publishes the tagged commit.
+#
+# Auth: npm TRUSTED PUBLISHING (OIDC) is the ONLY publish mechanism — there is
+# no npm token. `npm publish` authenticates via the workflow's `id-token: write`
+# OIDC token, and provenance is generated from the public Actions run.
+#
+# One-time setup before the first publish (human/ops, done on npmjs.com — NOT a
+# repo secret): configure a **trusted publisher** for `@amigo-ai/scribe` at
+# https://www.npmjs.com/package/@amigo-ai/scribe/access pointing at this repo
+# (amigo-ai/scribe-typescript-sdk) and workflow (`.github/workflows/release.yml`).
+# The repository must be PUBLIC for OIDC provenance + trusted publishing.
 #
 # Trigger: a published GitHub Release (preferred) or a manual workflow_dispatch
 # from a v* tag ref. The version in package.json must equal the tag.
-#
-# Prerequisites for the first real publish (both are human/ops actions):
-#   1. NPM_TOKEN — an npm automation token with publish rights to the @amigo-ai
-#      scope, stored as a repo secret. (If npm trusted publishing is configured
-#      for this workflow instead, the OIDC path below is used and no token is
-#      needed.)
-#   2. The repo must be PUBLIC for `--provenance` to succeed (provenance is
-#      generated from the public Actions run + OIDC).
 
 on:
   workflow_dispatch:
@@ -28,7 +30,7 @@ on:
 
 permissions:
   contents: read
-  id-token: write
+  id-token: write # required for npm trusted publishing (OIDC) + provenance
   issues: write # open a tracked issue if the npm publish fails
 
 concurrency:
@@ -88,34 +90,19 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
 
       - name: Install npm 11
+        # Trusted publishing (OIDC) requires npm >= 11.5.1.
         run: npm install --global npm@11.13.0
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Validate publish credentials
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Verify OIDC is available
         run: |
-          echo "::add-mask::$NODE_AUTH_TOKEN"
-          NODE_AUTH_TOKEN_TRIMMED="${NODE_AUTH_TOKEN//[[:space:]]/}"
-          if [ -n "$NODE_AUTH_TOKEN_TRIMMED" ]; then
-            echo "::add-mask::$NODE_AUTH_TOKEN_TRIMMED"
-            NPM_USERCONFIG="$RUNNER_TEMP/npmrc-validate"
-            trap 'rm -f "$NPM_USERCONFIG"' EXIT
-            echo "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN_TRIMMED}" > "$NPM_USERCONFIG"
-            chmod 600 "$NPM_USERCONFIG"
-            npm whoami --userconfig "$NPM_USERCONFIG" --registry https://registry.npmjs.org >/dev/null
-            echo "Using validated NPM_TOKEN credentials."
-            exit 0
-          fi
-
           if [ -z "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ] || [ -z "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" ]; then
-            echo "::error::No NPM_TOKEN is configured and GitHub OIDC token request variables are unavailable. Configure npm trusted publishing for .github/workflows/release.yml or provide NPM_TOKEN."
+            echo "::error::GitHub OIDC token request variables are unavailable. This workflow publishes via npm trusted publishing only — ensure 'permissions: id-token: write' is set and a trusted publisher is configured for @amigo-ai/scribe on npmjs.com."
             exit 1
           fi
-
-          echo "No NPM_TOKEN configured; publish will use npm trusted publishing via GitHub OIDC."
+          echo "OIDC available; publishing via npm trusted publishing."
 
       - name: Validate release package
         env:
@@ -159,24 +146,8 @@ jobs:
       - name: Verify package (build + typecheck + test + publint/attw/pack)
         run: npm run prepublishOnly
 
-      - name: Publish to npm
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: |
-          echo "::add-mask::$NODE_AUTH_TOKEN"
-          NODE_AUTH_TOKEN_TRIMMED="${NODE_AUTH_TOKEN//[[:space:]]/}"
-          if [ -n "$NODE_AUTH_TOKEN_TRIMMED" ]; then
-            echo "::add-mask::$NODE_AUTH_TOKEN_TRIMMED"
-            echo "Using NPM_TOKEN. Prefer npm trusted publishing once package settings are configured."
-            NPM_USERCONFIG="$RUNNER_TEMP/npmrc"
-            trap 'rm -f "$NPM_USERCONFIG"' EXIT
-            echo "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN_TRIMMED}" > "$NPM_USERCONFIG"
-            chmod 600 "$NPM_USERCONFIG"
-            npm publish --userconfig "$NPM_USERCONFIG" --access public --provenance
-          else
-            echo "Using npm trusted publishing via OIDC."
-            npm publish --access public --provenance
-          fi
+      - name: Publish to npm (trusted publishing / OIDC)
+        run: npm publish --access public --provenance
 
       - name: Publish Summary
         run: |
@@ -184,6 +155,7 @@ jobs:
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "- Package: @amigo-ai/scribe@${{ steps.release.outputs.version }}" >> "$GITHUB_STEP_SUMMARY"
           echo "- Tag: ${{ steps.release.outputs.tag }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Auth: npm trusted publishing (OIDC)" >> "$GITHUB_STEP_SUMMARY"
           echo "- Provenance: requested" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Open issue on publish failure

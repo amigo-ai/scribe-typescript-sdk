@@ -252,12 +252,18 @@ mirroring `@amigo-ai/platform-sdk`:
    (`build → typecheck → test → publint + attw + npm pack`) and runs
    `npm publish --provenance --access public`.
 
-Before the first publish can succeed, two one-time prerequisites must be in
-place (see the header comment in `release.yml`):
+Publishing uses **npm [trusted publishing](https://docs.npmjs.com/trusted-publishers)
+(OIDC)** — there is no npm token. The workflow authenticates with its
+`id-token: write` OIDC token, which also produces the provenance attestation.
 
-- an `NPM_TOKEN` repo secret with publish rights to the `@amigo-ai` npm scope
-  (or npm trusted-publishing configured for the workflow), and
-- the repository must be **public** for provenance generation.
+Before the first publish can succeed, two one-time setup steps are required (no
+repo secrets):
+
+- **Configure a trusted publisher** for `@amigo-ai/scribe` on npmjs.com
+  (Package → Settings → Trusted Publisher) pointing at this repository
+  (`amigo-ai/scribe-typescript-sdk`) and workflow (`.github/workflows/release.yml`).
+  This is the account/ops action that replaces provisioning a token.
+- The repository must be **public** for OIDC trusted publishing + provenance.
 
 Pre-publish validation can be run locally at any time:
 
