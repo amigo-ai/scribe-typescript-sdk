@@ -43,6 +43,21 @@ no Node-only imports) but the REST client runs anywhere `fetch` exists.
 > the session ends, read the transcript and the generated artifacts (note,
 > summary, checklist, codes) via the REST client covered here.
 
+For the **browser vs. server split-trust** model there are two higher-level
+clients:
+
+- **`ScribeServerClient`** (backend) — holds the M2M secret; mints per-clinician
+  provider tokens (act-as-by-email), does create/allocate, and mints WS-only
+  attach tickets. Exposes `allocate` and `mintAttachTicket` separately plus a
+  `prepareConnection` helper. Server-side only.
+- **`ScribeStreamClient`** (browser) — given a host + attach ticket, manages the
+  WebSocket audio connection.
+
+> **Integrating as an external customer?** See the end-to-end
+> [customer integration guide](docs/customer-integration.md) — the split-trust
+> model, copy-pasteable backend + browser examples, security, hosts, and
+> troubleshooting.
+
 ## Install
 
 ```bash
@@ -87,39 +102,76 @@ try {
 const { segments } = await scribe.getTranscript(session.id)
 ```
 
-### Streaming WebSocket client
+### Server client (backend)
+
+`ScribeServerClient` is the confidential, backend half: it holds the M2M
+credentials and encapsulates the two mints + CRUD. **Never import it into a
+browser bundle.**
+
+```ts
+import { ScribeServerClient } from '@amigo-ai/scribe'
+
+const server = new ScribeServerClient({
+  identityBaseUrl: 'https://api.platform.amigo.ai', // identity /token (mints)
+  scribeBaseUrl: 'https://scribe.platform.amigo.ai', // Scribe CRUD
+  workspaceId: 'ws_123',
+  clientId: process.env.AMIGO_M2M_CLIENT_ID!,
+  clientSecret: process.env.AMIGO_M2M_CLIENT_SECRET!, // server-side only
+})
+
+// `clinicianEmail` comes from YOUR authenticated app session (never the browser).
+const session = await server.createSession(clinicianEmail, { external_id: 'appointment-42' })
+
+// Encapsulating helper: one allocate + one ticket mint → the browser-safe bundle.
+const { host, ticket } = await server.prepareConnection(clinicianEmail, session.id)
+
+// ...or the pieces separately:
+const allocation = await server.allocate(clinicianEmail, session.id) // { host, expiresAt }
+const attach = await server.mintAttachTicket(clinicianEmail, session.id) // { ticket, expiresAt }
+
+// Reads (transcript / note / summary / checklist / codes) as the clinician:
+const { segments } = await server.scribe(clinicianEmail).getTranscript(session.id)
+```
+
+A `400` `invalid_target` (`BadRequestError` with `errorCode === 'invalid_target'`)
+means the clinician has no active Scribe grant in the workspace.
+
+### Streaming WebSocket client (browser)
 
 `ScribeStreamClient` owns the worker WebSocket: it attaches with an **attach
 ticket**, streams caller-supplied PCM16, and handles keepalive + resumable
 reconnect. Auth is a purpose-built, WS-only attach ticket (aud `scribe-streaming`,
 scope `scribe:streams:connect`, ~5-min TTL) — **not** a raw provider JWT. The SDK
-never holds a provider credential or mints tickets; it calls injected seams
-(both backed by your backend, re-invoked on every reconnect):
+never holds a provider credential or mints tickets; it resolves a host + ticket
+from your backend via one of three seams (re-invoked on every reconnect):
 
 ```ts
 import { ScribeStreamClient } from '@amigo-ai/scribe'
 
 const client = new ScribeStreamClient({
   sessionId: session.id,
-  // Your backend does grant_type=token_exchange → a session-bound attach ticket.
-  ticketProvider: async sessionId => ({ ticket: await mintAttachTicket(sessionId) }),
-  // Your backend calls the Scribe allocate endpoint.
-  allocateProvider: async sessionId => allocateHost(sessionId), // → { host, expiresAt }
+  // PREFERRED: one call to your backend route returning { host, ticket }
+  // (backed by ScribeServerClient.prepareConnection).
+  connectionProvider: async sessionId => fetchConnectionFromYourBackend(sessionId),
   onTurn: segment => render(segment), // normalized SttTranscriptSegment (server ordinal)
   onStateChange: state => console.log(state),
   onReconnect: () => console.log('resumed'),
   onError: err => console.error(err),
 })
 
-await client.connect() // allocate → mint ticket → open WS
+await client.connect() // resolve host + ticket → open WS
 client.sendAudio(pcm16) // ArrayBuffer | Uint8Array — you own capture
 client.pause()
 client.resume()
 client.end() // finalize + clean close (1000)
 ```
 
+Instead of `connectionProvider` you can pass the split `allocateProvider` +
+`ticketProvider` seams, or static `host` + `ticket` for a one-shot (not
+reconnect-safe) connection.
+
 Reconnect is automatic on `1012` / `1006` (never on `1000` / `4009` / `4001`):
-the client re-allocates + re-mints a ticket, reconnects the same session, sends
+the client re-resolves a fresh host + ticket, reconnects the same session, sends
 `resume_from{acked_offset_bytes}`, and resends only the unacked ring-buffer
 audio. Pair `normalizeTurn` + `transcriptReducer` (or your own store) to render
 by the server-owned ordinal.
