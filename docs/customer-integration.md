@@ -178,9 +178,6 @@ The grant is the authority the act-as-by-email mint resolves against.
   management endpoints are being added).
 - Only an **active** grant mints a token. Unknown / pending / revoked emails
   fail closed with `invalid_target` (see §3.3 and Troubleshooting).
-- A clinician whose grant **requires MFA** cannot use the M2M path at all — a
-  machine cannot satisfy an interactive MFA challenge, so the mint fails closed.
-  This is the **MFA carve-out** (§3.4).
 
 ### 2.3 Scopes
 
@@ -291,11 +288,9 @@ subject is rejected. Only a full provider JWT can mint a ticket.
 ### 3.4 Fail-closed behaviors to handle
 
 - **`invalid_target` (400)** on the `client_credentials` mint → the clinician has
-  no active, non-MFA grant in your workspace (unknown / pending / revoked /
-  cross-workspace / **MFA-required**). Surface a clean "this clinician isn't
-  enabled for Scribe" error; do not retry blindly.
-- **MFA carve-out** — an MFA-required grant fails closed by design. Clinicians
-  gated behind MFA cannot use the machine-delegated path.
+  no active grant in your workspace (unknown / pending / revoked /
+  cross-workspace). Surface a clean "this clinician isn't enabled for Scribe"
+  error; do not retry blindly.
 - **`invalid_scope` / `invalid_request` (400)** → a malformed exchange request
   (see Troubleshooting).
 - **`503` + `Retry-After`** on `allocate` → Fleet at capacity or cooldown; back
@@ -537,8 +532,6 @@ ticket ephemeral in the browser.
   allocate / mint a ticket for their own sessions (a foreign `sessionId` →
   `invalid_target` / `4004`). Add an app-level check only if your access model is
   finer-grained than "any clinician in the workspace."
-- **MFA carve-out.** Clinicians gated behind MFA cannot use the machine path
-  (§3.4). Handle `invalid_target` as a clean "not enabled" state.
 - **Ticket handling in the browser.** Keep the ticket **in memory only** — never
   `localStorage`/`sessionStorage`. Set `Cache-Control: no-store` on your ticket
   and allocate responses. The SDK re-mints per (re)connect, so there's no need to
@@ -627,11 +620,11 @@ different `session_id`, or a REST provider JWT was mistakenly used at the WS.
 
 ### Token endpoint errors (OAuth envelope `{ error, error_description }`, HTTP 400)
 
-| `error`           | Cause                                                                                                                              | Fix                                                                                                       |
-| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| `invalid_target`  | The `provider_email` has no active, non-MFA grant in the workspace (unknown / pending / revoked / cross-workspace / MFA-required). | Provision/activate a Scribe access grant for that clinician; MFA-gated clinicians can't use the M2M path. |
-| `invalid_scope`   | Requested scope isn't allowed for this credential / grant.                                                                         | Use the default `allowed_scopes`; the attach ticket is `scribe:streams:connect` only.                     |
-| `invalid_request` | Malformed request — e.g. missing `provider_email` on the M2M mint, or a bad `token_exchange` body.                                 | Check the form fields in §3.1 / §3.3.                                                                     |
+| `error`           | Cause                                                                                                      | Fix                                                                                   |
+| ----------------- | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `invalid_target`  | The `provider_email` has no active grant in the workspace (unknown / pending / revoked / cross-workspace). | Provision/activate a Scribe access grant for that clinician.                          |
+| `invalid_scope`   | Requested scope isn't allowed for this credential / grant.                                                 | Use the default `allowed_scopes`; the attach ticket is `scribe:streams:connect` only. |
+| `invalid_request` | Malformed request — e.g. missing `provider_email` on the M2M mint, or a bad `token_exchange` body.         | Check the form fields in §3.1 / §3.3.                                                 |
 
 ### Allocate `503`
 

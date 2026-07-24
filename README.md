@@ -134,7 +134,7 @@ const { segments } = await server.scribe(clinicianEmail).getTranscript(session.i
 ```
 
 A `400` `invalid_target` (`BadRequestError` with `errorCode === 'invalid_target'`)
-means the clinician has no active, non-MFA Scribe grant in the workspace.
+means the clinician has no active Scribe grant in the workspace.
 
 ### Streaming WebSocket client (browser)
 

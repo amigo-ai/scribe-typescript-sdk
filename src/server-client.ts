@@ -128,8 +128,8 @@ export class ScribeServerClient {
    * grant. Cached in memory per email until shortly before expiry.
    *
    * Throws {@link BadRequestError} with `errorCode === 'invalid_target'` when the
-   * clinician has no active, non-MFA grant in the workspace (unknown / pending /
-   * revoked / cross-workspace / MFA-required — the MFA carve-out).
+   * clinician has no active grant in the workspace (unknown / pending / revoked /
+   * cross-workspace).
    */
   async mintProviderToken(providerEmail: string): Promise<string> {
     const email = normalizeEmail(providerEmail)
@@ -304,7 +304,7 @@ async function readJson(response: Response): Promise<unknown> {
  * Map an identity `/token` OAuth error (`{ error, error_description }`) to a
  * typed {@link ScribeError}. `errorCode` carries the OAuth `error` string
  * (`invalid_target`, `invalid_scope`, `invalid_request`, ...) for programmatic
- * handling (e.g. the MFA carve-out / no-grant case surfaces as `invalid_target`).
+ * handling (e.g. the no-grant case surfaces as `invalid_target`).
  */
 function toIdentityError(response: Response, grantType: string | null, body: unknown): ScribeError {
   const record = body && typeof body === 'object' ? (body as Record<string, unknown>) : {}
