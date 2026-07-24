@@ -193,6 +193,17 @@ audience: an attach ticket is rejected at every REST endpoint, and a REST
 provider JWT is rejected at the WebSocket. The two credentials are not
 interchangeable.
 
+### 2.4 Install the SDK
+
+Both the backend and the browser import from the same ESM-only package:
+
+```bash
+npm i @amigo-ai/scribe
+```
+
+Requires Node.js ≥ 20 on the backend, and any modern browser (`fetch` +
+`WebSocket`) on the client.
+
 ---
 
 ## 3. Backend integration
