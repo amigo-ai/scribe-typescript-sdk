@@ -263,7 +263,7 @@ Publishing uses **npm [trusted publishing](https://docs.npmjs.com/trusted-publis
 (OIDC)** — there is no npm token. The workflow authenticates with its
 `id-token: write` OIDC token, which also produces the provenance attestation.
 
-Before the first publish can succeed, two one-time setup steps are required (no
+Before the first publish can succeed, three one-time setup steps are required (no
 repo secrets):
 
 - **Configure a trusted publisher** for `@amigo-ai/scribe-typescript-sdk` on npmjs.com
