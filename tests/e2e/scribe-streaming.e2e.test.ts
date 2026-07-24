@@ -28,7 +28,12 @@
  */
 import 'dotenv/config'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { ScribeClient, ScribeStreamClient, ServiceUnavailableError } from '../../src'
+import {
+  ScribeClient,
+  ScribeStreamClient,
+  ServiceUnavailableError,
+  WS_CONNECT_PATH,
+} from '../../src'
 import type { ScribeStreamState, SttTranscriptSegment } from '../../src'
 import { mintAttachTicket, mintM2mProviderToken, ProviderGrantError } from './scribe-auth'
 
@@ -80,15 +85,33 @@ function synthPcm16(durationMs: number): Uint8Array {
 }
 
 /**
+ * Plain HTTP GET to the gameserver's WS path to tell "network can't reach the
+ * host" apart from "reached it but the WS didn't open". Any HTTP status ⇒
+ * reachable (the worker answers 4xx/426 to a non-upgrade GET); a thrown
+ * fetch error ⇒ the host is unreachable from here (e.g. a staging ALB that
+ * doesn't allow the CI runner's egress IPs).
+ */
+async function probeHost(host: string): Promise<string> {
+  try {
+    const r = await fetch(`https://${host}${WS_CONNECT_PATH}`, { method: 'GET' })
+    return `reachable (HTTP ${r.status})`
+  } catch (e) {
+    return `UNREACHABLE (${e instanceof Error ? e.message : String(e)})`
+  }
+}
+
+/**
  * Poll `getState()` until it reaches `target`. `connect()` resolves once the
  * socket is created (not on open), so the real WS transitions connecting →
- * streaming asynchronously. Throws the captured error if the client fails.
+ * streaming asynchronously. Throws the captured error if the client fails; on
+ * timeout, probes host reachability so the failure is diagnosable.
  */
 async function waitForState(
   client: ScribeStreamClient,
   target: ScribeStreamState,
   timeoutMs: number,
-  errors: Error[]
+  errors: Error[],
+  host: string
 ): Promise<void> {
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
@@ -101,7 +124,12 @@ async function waitForState(
     }
     await sleep(100)
   }
-  throw new Error(`timed out waiting for state="${target}" (last="${client.getState()}")`)
+  const probe = host ? await probeHost(host) : 'no host'
+  const errMsgs = errors.map(e => e.message).join('; ') || 'none'
+  throw new Error(
+    `timed out waiting for state="${target}" (last="${client.getState()}"; ` +
+      `errors=[${errMsgs}]; host-probe: ${probe})`
+  )
 }
 
 describe.runIf(hasCreds)('Scribe streaming e2e (M2M → create → allocate → stream → end)', () => {
@@ -197,10 +225,13 @@ describe.runIf(hasCreds)('Scribe streaming e2e (M2M → create → allocate → 
         }
         throw err
       }
-      // Attached: wait for the 101 upgrade → open → streaming transition
-      // (connect() resolves on socket creation, not on open).
-      await waitForState(client, 'streaming', 20_000, errors)
       expect(allocatedHost.length).toBeGreaterThan(0)
+      // eslint-disable-next-line no-console
+      console.warn(`[scribe streaming e2e] allocated host=${allocatedHost}; awaiting attach…`)
+      // Attached: wait for the 101 upgrade → open → streaming transition
+      // (connect() resolves on socket creation, not on open). Generous timeout
+      // for a possible GameServer cold-start.
+      await waitForState(client, 'streaming', 60_000, errors, allocatedHost)
       expect(client.getState()).toBe('streaming')
 
       // Feed ~4s of synthetic PCM16 in 100 ms chunks.
@@ -234,7 +265,7 @@ describe.runIf(hasCreds)('Scribe streaming e2e (M2M → create → allocate → 
 
     // 5. Clean end.
     expect(client.getState()).toBe('ended')
-  }, 60_000)
+  }, 120_000)
 
   afterAll(() => {
     // Nothing to tear down: sessions expire on their own; end() closed the WS.

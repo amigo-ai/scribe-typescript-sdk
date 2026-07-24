@@ -58,7 +58,8 @@ npm install @amigo-ai/scribe
 import { ScribeClient, ServiceUnavailableError } from '@amigo-ai/scribe'
 
 const scribe = new ScribeClient({
-  baseUrl: 'https://api.amigo.ai',
+  // Scribe API (CRUD) host — production. (Staging: https://scribe-staging.platform.amigo.ai)
+  baseUrl: 'https://scribe.platform.amigo.ai',
   // A provider JWT carrying `scribe:sessions:write` (+ `scribe:sessions:read_own`
   // for transcripts). Pass a string, or a (possibly async) supplier to refresh
   // a short-lived token per request.
