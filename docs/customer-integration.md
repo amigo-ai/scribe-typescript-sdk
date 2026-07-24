@@ -403,23 +403,20 @@ const server = new ScribeServerClient({
   clientSecret: process.env.AMIGO_M2M_CLIENT_SECRET!, // server-side only
 })
 
-// (2) Create the Scribe session for a customer appointment, and remember which
-// clinician owns it. Return ONLY the sessionId — the browser fetches host +
-// ticket via the route below. Do NOT pre-allocate here (allocate has a
-// per-session cooldown). `appointmentId` is YOUR appointment identifier; it maps
-// to Scribe's `external_id` (idempotent per provider — re-creating for the same
-// appointment returns the same session).
+// (2) Create the Scribe session for a customer appointment. Return ONLY the
+// sessionId — the browser fetches host + ticket via the route below. Do NOT
+// pre-allocate here (allocate has a per-session cooldown). `appointmentId` is
+// YOUR appointment identifier; it maps to Scribe's `external_id` (idempotent per
+// provider — re-creating for the same appointment returns the same session).
 export async function createScribeSession(clinicianEmail: string, appointmentId: string) {
   const session = await server.createSession(clinicianEmail, { external_id: appointmentId })
-  await recordSessionOwner(session.id, clinicianEmail) // your DB: sessionId -> clinician
-  return { sessionId: session.id }
+  return { sessionId: session.id } // associate with your appointment as you see fit
 }
 
 // Backs the browser SDK's `connectionProvider` seam. One call = one allocate +
 // one ticket mint (the provider token is minted once and cached). Re-invoked per
 // (re)connect. Serve with `Cache-Control: no-store`.
 export async function connectionRoute(authedClinicianEmail: string, sessionId: string) {
-  await assertOwns(authedClinicianEmail, sessionId) // app-level guard — see below
   const conn = await server.prepareConnection(authedClinicianEmail, sessionId)
   // conn = { sessionId, host, ticket, hostExpiresAt, ticketExpiresAt }
   return { host: conn.host, ticket: conn.ticket } // ONLY this — NEVER the provider JWT
@@ -427,7 +424,6 @@ export async function connectionRoute(authedClinicianEmail: string, sessionId: s
 
 // After the session, read artifacts as the clinician (proxy the result to the browser):
 export async function transcriptRoute(authedClinicianEmail: string, sessionId: string) {
-  await assertOwns(authedClinicianEmail, sessionId)
   return server.scribe(authedClinicianEmail).getTranscript(sessionId)
 }
 ```
@@ -440,17 +436,13 @@ separately too (they back `allocateProvider` / `ticketProvider`). Every route
 resolves the clinician from **your** authenticated session — never take the
 clinician email from the browser.
 
-> **Is `assertOwns` necessary?** Not for cross-clinician safety — the platform
-> already enforces it. `allocate` and `token_exchange` are **provider-ownership-bound**:
-> the token is minted _acting as the authenticated clinician_, and Amigo rejects
-> allocate / ticket mint for any `session_id` that clinician's provider entity
-> doesn't own (a foreign session → `invalid_target` at mint, `4004` at attach).
-> So a browser passing an arbitrary `sessionId` can at most reach **that same
-> clinician's own** sessions, never another clinician's. Keep `assertOwns` as
-> (a) defense-in-depth, (b) a clean `403`/`404` from your own layer instead of an
-> opaque platform error, and (c) the enforcement point if your app's access model
-> is finer-grained than "any clinician in the workspace" (e.g. this clinician may
-> not touch this appointment right now). If none of those apply, you can drop it.
+> **No app-level session-ownership check is needed here.** `allocate` and
+> `token_exchange` are **provider-ownership-bound**: the token is minted _acting
+> as the authenticated clinician_, and Amigo rejects allocate / ticket mint for
+> any `session_id` that clinician's provider entity doesn't own (a foreign
+> session → `invalid_target` at mint, `4004` at attach). So a browser passing an
+> arbitrary `sessionId` can at most reach **that same clinician's own** sessions,
+> never another clinician's — the platform is the ownership boundary.
 
 > **Not using the SDK on the backend?** The raw form-encoded `/token` mints and
 > REST calls in §3 are all you need — `ScribeServerClient` is a thin,
@@ -538,10 +530,13 @@ ticket ephemeral in the browser.
 - **Browser calls Amigo directly only for the WebSocket.** Proxy all
   create/allocate/read (CRUD) calls through your backend (§1); the browser must
   not call the Amigo REST API directly or hold a provider credential.
-- **Per-clinician ownership.** Bind every session to the authenticated portal
-  user/tenant. Reject any browser-supplied `sessionId` for mint/allocate that
-  the caller does not own — otherwise a user could attach to another clinician's
-  session.
+- **Per-clinician ownership.** Always derive the acting clinician from **your**
+  authenticated app session — never from the browser. You don't need to
+  re-validate a browser-supplied `sessionId` against the clinician: `allocate`
+  and `token_exchange` are provider-ownership-bound, so a clinician can only ever
+  allocate / mint a ticket for their own sessions (a foreign `sessionId` →
+  `invalid_target` / `4004`). Add an app-level check only if your access model is
+  finer-grained than "any clinician in the workspace."
 - **MFA carve-out.** Clinicians gated behind MFA cannot use the machine path
   (§3.4). Handle `invalid_target` as a clean "not enabled" state.
 - **Ticket handling in the browser.** Keep the ticket **in memory only** — never
