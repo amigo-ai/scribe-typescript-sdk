@@ -1,4 +1,4 @@
-# @amigo-ai/scribe
+# @amigo-ai/scribe-typescript-sdk
 
 Framework-agnostic TypeScript SDK for the Amigo **Scribe** streaming service.
 
@@ -61,7 +61,7 @@ clients:
 ## Install
 
 ```bash
-npm i @amigo-ai/scribe
+npm i @amigo-ai/scribe-typescript-sdk
 ```
 
 Requires Node.js ≥ 20 (or any modern browser / runtime with `fetch` +
@@ -70,7 +70,7 @@ Requires Node.js ≥ 20 (or any modern browser / runtime with `fetch` +
 ## Usage
 
 ```ts
-import { ScribeClient, ServiceUnavailableError } from '@amigo-ai/scribe'
+import { ScribeClient, ServiceUnavailableError } from '@amigo-ai/scribe-typescript-sdk'
 
 const scribe = new ScribeClient({
   // Scribe API (CRUD) host — production. (Staging: https://scribe-staging.platform.amigo.ai)
@@ -109,7 +109,7 @@ credentials and encapsulates the two mints + CRUD. **Never import it into a
 browser bundle.**
 
 ```ts
-import { ScribeServerClient } from '@amigo-ai/scribe'
+import { ScribeServerClient } from '@amigo-ai/scribe-typescript-sdk'
 
 const server = new ScribeServerClient({
   identityBaseUrl: 'https://api.platform.amigo.ai', // identity /token (mints)
@@ -146,7 +146,7 @@ never holds a provider credential or mints tickets; it resolves a host + ticket
 from your backend via one of three seams (re-invoked on every reconnect):
 
 ```ts
-import { ScribeStreamClient } from '@amigo-ai/scribe'
+import { ScribeStreamClient } from '@amigo-ai/scribe-typescript-sdk'
 
 const client = new ScribeStreamClient({
   sessionId: session.id,
@@ -238,7 +238,7 @@ runtime bundle.
 ## Versioning & releases
 
 The SDK follows [semver](https://semver.org). It is published to npm as
-[`@amigo-ai/scribe`](https://www.npmjs.com/package/@amigo-ai/scribe) with
+[`@amigo-ai/scribe-typescript-sdk`](https://www.npmjs.com/package/@amigo-ai/scribe-typescript-sdk) with
 [npm provenance](https://docs.npmjs.com/generating-provenance-statements).
 
 Releases are cut manually and published by CI (`.github/workflows/release.yml`),
@@ -259,7 +259,7 @@ Publishing uses **npm [trusted publishing](https://docs.npmjs.com/trusted-publis
 Before the first publish can succeed, two one-time setup steps are required (no
 repo secrets):
 
-- **Configure a trusted publisher** for `@amigo-ai/scribe` on npmjs.com
+- **Configure a trusted publisher** for `@amigo-ai/scribe-typescript-sdk` on npmjs.com
   (Package → Settings → Trusted Publisher) pointing at this repository
   (`amigo-ai/scribe-typescript-sdk`) and workflow (`.github/workflows/release.yml`).
   This is the account/ops action that replaces provisioning a token.

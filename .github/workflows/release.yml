@@ -1,6 +1,6 @@
 name: Release
 
-# Publishes @amigo-ai/scribe to npm. Mirrors amigo-platform-typescript-sdk's
+# Publishes @amigo-ai/scribe-typescript-sdk to npm. Mirrors amigo-platform-typescript-sdk's
 # publish arrangement: versioning is a manual, separate step (bump package.json,
 # tag v<major>.<minor>.<patch>, and cut a GitHub Release); THIS workflow only
 # validates + publishes the tagged commit.
@@ -10,8 +10,8 @@ name: Release
 # OIDC token, and provenance is generated from the public Actions run.
 #
 # One-time setup before the first publish (human/ops, done on npmjs.com — NOT a
-# repo secret): configure a **trusted publisher** for `@amigo-ai/scribe` at
-# https://www.npmjs.com/package/@amigo-ai/scribe/access pointing at this repo
+# repo secret): configure a **trusted publisher** for `@amigo-ai/scribe-typescript-sdk` at
+# https://www.npmjs.com/package/@amigo-ai/scribe-typescript-sdk/access pointing at this repo
 # (amigo-ai/scribe-typescript-sdk) and workflow (`.github/workflows/release.yml`).
 # The repository must be PUBLIC for OIDC provenance + trusted publishing.
 #
@@ -99,7 +99,7 @@ jobs:
       - name: Verify OIDC is available
         run: |
           if [ -z "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ] || [ -z "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" ]; then
-            echo "::error::GitHub OIDC token request variables are unavailable. This workflow publishes via npm trusted publishing only — ensure 'permissions: id-token: write' is set and a trusted publisher is configured for @amigo-ai/scribe on npmjs.com."
+            echo "::error::GitHub OIDC token request variables are unavailable. This workflow publishes via npm trusted publishing only — ensure 'permissions: id-token: write' is set and a trusted publisher is configured for @amigo-ai/scribe-typescript-sdk on npmjs.com."
             exit 1
           fi
           echo "OIDC available; publishing via npm trusted publishing."
@@ -119,26 +119,26 @@ jobs:
           VIEW_FOUND=false
           for attempt in 1 2; do
             : > "$VIEW_LOG"
-            if npm view "@amigo-ai/scribe@${VERSION}" version --json >"$VIEW_LOG" 2>&1; then
+            if npm view "@amigo-ai/scribe-typescript-sdk@${VERSION}" version --json >"$VIEW_LOG" 2>&1; then
               VIEW_FOUND=true
               break
             fi
             if grep -Eq 'E404|"code"[[:space:]]*:[[:space:]]*"E404"|404 Not Found' "$VIEW_LOG"; then
               break
             fi
-            echo "npm view failed for @amigo-ai/scribe@${VERSION}; retrying once."
+            echo "npm view failed for @amigo-ai/scribe-typescript-sdk@${VERSION}; retrying once."
             sleep 10
           done
 
           if [ "$VIEW_FOUND" = "true" ]; then
-            echo "::error::@amigo-ai/scribe@${VERSION} is already published on npm."
+            echo "::error::@amigo-ai/scribe-typescript-sdk@${VERSION} is already published on npm."
             exit 1
           fi
 
           if grep -Eq 'E404|"code"[[:space:]]*:[[:space:]]*"E404"|404 Not Found' "$VIEW_LOG"; then
-            echo "@amigo-ai/scribe@${VERSION} is not published yet."
+            echo "@amigo-ai/scribe-typescript-sdk@${VERSION} is not published yet."
           else
-            echo "::error::Unable to verify npm publication state for @amigo-ai/scribe@${VERSION}."
+            echo "::error::Unable to verify npm publication state for @amigo-ai/scribe-typescript-sdk@${VERSION}."
             cat "$VIEW_LOG"
             exit 1
           fi
@@ -153,7 +153,7 @@ jobs:
         run: |
           echo "## Publish Summary" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Package: @amigo-ai/scribe@${{ steps.release.outputs.version }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Package: @amigo-ai/scribe-typescript-sdk@${{ steps.release.outputs.version }}" >> "$GITHUB_STEP_SUMMARY"
           echo "- Tag: ${{ steps.release.outputs.tag }}" >> "$GITHUB_STEP_SUMMARY"
           echo "- Auth: npm trusted publishing (OIDC)" >> "$GITHUB_STEP_SUMMARY"
           echo "- Provenance: requested" >> "$GITHUB_STEP_SUMMARY"
@@ -165,6 +165,6 @@ jobs:
         run: |
           TAG="${{ steps.release.outputs.tag || github.ref_name }}"
           gh issue create --repo "$GITHUB_REPOSITORY" \
-            --title "npm publish FAILED: @amigo-ai/scribe ${TAG}" \
-            --body "release.yml failed — \`@amigo-ai/scribe@${{ steps.release.outputs.version || 'unknown' }}\` did NOT publish to npm. Investigate and re-run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            --title "npm publish FAILED: @amigo-ai/scribe-typescript-sdk ${TAG}" \
+            --body "release.yml failed — \`@amigo-ai/scribe-typescript-sdk@${{ steps.release.outputs.version || 'unknown' }}\` did NOT publish to npm. Investigate and re-run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
           || echo "::error::npm publish failed for ${TAG} AND could not open a tracking issue — see this run."

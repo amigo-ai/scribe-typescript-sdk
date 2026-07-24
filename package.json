@@ -1,5 +1,5 @@
 {
-  "name": "@amigo-ai/scribe",
+  "name": "@amigo-ai/scribe-typescript-sdk",
   "version": "0.1.0",
   "description": "Framework-agnostic TypeScript SDK for the Amigo Scribe streaming service",
   "publishConfig": {
