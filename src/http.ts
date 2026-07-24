@@ -11,7 +11,7 @@ export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>
 export type TokenProvider = string | (() => string | Promise<string>)
 
 export interface ScribeClientConfig {
-  /** Base URL of the Scribe (platform) API, e.g. `https://api.amigo.ai`. */
+  /** Base URL of the Scribe API, e.g. `https://scribe.platform.amigo.ai`. */
   baseUrl: string
   /** Bearer token (or a supplier) carrying `scribe:sessions:write`. */
   token: TokenProvider
