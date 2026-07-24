@@ -162,8 +162,8 @@ jobs:
         if: failure()
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.release.outputs.tag || github.ref_name }}
         run: |
-          TAG="${{ steps.release.outputs.tag || github.ref_name }}"
           gh issue create --repo "$GITHUB_REPOSITORY" \
             --title "npm publish FAILED: @amigo-ai/scribe-typescript-sdk ${TAG}" \
             --body "release.yml failed — \`@amigo-ai/scribe-typescript-sdk@${{ steps.release.outputs.version || 'unknown' }}\` did NOT publish to npm. Investigate and re-run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
