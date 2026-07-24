@@ -3,14 +3,18 @@
 Two suites exercise the SDK against a **real** Scribe stack:
 
 1. **`scribe-crud.e2e.test.ts`** — CRUD client (create-session → allocate →
-   get-transcript) with a static provider JWT (`SCRIBE_E2E_TOKEN`). Local-only.
+   get-transcript). Uses a static provider JWT (`SCRIBE_E2E_TOKEN`) if set,
+   otherwise mints one via the provider-M2M grant (same secrets as suite 2), so
+   it **runs in CI** too.
 2. **`scribe-streaming.e2e.test.ts`** — the full **superscribe-web in-person
    path** through the SDK: mint a per-clinician provider token via the
    provider-M2M `client_credentials` + `provider_email` (act-as-by-email) grant →
    `createSession` → `allocate` → mint a `token_exchange` attach ticket → open
    the WebSocket, stream **synthetic PCM16** (headless CI has no mic), observe
-   acks/pong, then `end()`. This suite **runs in CI** on pushes to `main` and
-   same-repo PRs (see `.github/workflows/ci.yml` `e2e` job).
+   acks/pong, then `end()`.
+
+Both **run in CI** on pushes to `main` and same-repo PRs (see
+`.github/workflows/ci.yml` `e2e` job).
 
 Both are **gated**: they self-skip when their env vars are absent, so they are
 safe to run locally and fork PRs (no secrets) skip cleanly.

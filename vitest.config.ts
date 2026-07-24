@@ -18,14 +18,19 @@ export default defineConfig({
         },
       },
       // E2E tests — hit a real Scribe endpoint. Gated: skipped unless creds/env
-      // are present (see tests/e2e/*). Not run in CI yet (follow-up: PLA — wire
-      // into CI once staging is stable).
+      // are present (see tests/e2e/*). Runs in CI against staging (the `e2e`
+      // job in .github/workflows/ci.yml); self-skips without creds.
       {
         test: {
           name: 'e2e',
           include: ['tests/e2e/**/*.{test,spec}.{js,ts}'],
           exclude: ['**/node_modules/**'],
           pool: 'forks',
+          // Serialize the suites: they each allocate a GameServer from the
+          // shared staging Fleet, so running them in one fork (not in parallel)
+          // avoids racing for capacity (which would soft-skip the stream leg).
+          poolOptions: { forks: { singleFork: true } },
+          fileParallelism: false,
         },
       },
     ],
