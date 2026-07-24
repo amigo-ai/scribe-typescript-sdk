@@ -157,14 +157,3 @@ jobs:
           echo "- Tag: ${{ steps.release.outputs.tag }}" >> "$GITHUB_STEP_SUMMARY"
           echo "- Auth: npm trusted publishing (OIDC)" >> "$GITHUB_STEP_SUMMARY"
           echo "- Provenance: requested" >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Open issue on publish failure
-        if: failure()
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ steps.release.outputs.tag || github.ref_name }}
-        run: |
-          gh issue create --repo "$GITHUB_REPOSITORY" \
-            --title "npm publish FAILED: @amigo-ai/scribe-typescript-sdk ${TAG}" \
-            --body "release.yml failed — \`@amigo-ai/scribe-typescript-sdk@${{ steps.release.outputs.version || 'unknown' }}\` did NOT publish to npm. Investigate and re-run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
-          || echo "::error::npm publish failed for ${TAG} AND could not open a tracking issue — see this run."
