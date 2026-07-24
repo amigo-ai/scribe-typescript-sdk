@@ -403,11 +403,14 @@ const server = new ScribeServerClient({
   clientSecret: process.env.AMIGO_M2M_CLIENT_SECRET!, // server-side only
 })
 
-// (2) "start recording": create the session and remember which clinician owns
-// it. Return ONLY the sessionId — the browser fetches host + ticket via the
-// route below. Do NOT pre-allocate here (allocate has a per-session cooldown).
-export async function startRecording(clinicianEmail: string) {
-  const session = await server.createSession(clinicianEmail, { external_id: `appt-${Date.now()}` })
+// (2) Create the Scribe session for a customer appointment, and remember which
+// clinician owns it. Return ONLY the sessionId — the browser fetches host +
+// ticket via the route below. Do NOT pre-allocate here (allocate has a
+// per-session cooldown). `appointmentId` is YOUR appointment identifier; it maps
+// to Scribe's `external_id` (idempotent per provider — re-creating for the same
+// appointment returns the same session).
+export async function createScribeSession(clinicianEmail: string, appointmentId: string) {
+  const session = await server.createSession(clinicianEmail, { external_id: appointmentId })
   await recordSessionOwner(session.id, clinicianEmail) // your DB: sessionId -> clinician
   return { sessionId: session.id }
 }
@@ -416,7 +419,7 @@ export async function startRecording(clinicianEmail: string) {
 // one ticket mint (the provider token is minted once and cached). Re-invoked per
 // (re)connect. Serve with `Cache-Control: no-store`.
 export async function connectionRoute(authedClinicianEmail: string, sessionId: string) {
-  await assertOwns(authedClinicianEmail, sessionId) // never trust a raw browser id
+  await assertOwns(authedClinicianEmail, sessionId) // app-level guard — see below
   const conn = await server.prepareConnection(authedClinicianEmail, sessionId)
   // conn = { sessionId, host, ticket, hostExpiresAt, ticketExpiresAt }
   return { host: conn.host, ticket: conn.ticket } // ONLY this — NEVER the provider JWT
@@ -434,9 +437,20 @@ no-store`): it backs the browser SDK's `connectionProvider` seam and is **where
 the browser's WS host + auth token come from**. If you prefer the split seams,
 `server.allocate(email, id)` and `server.mintAttachTicket(email, id)` are exposed
 separately too (they back `allocateProvider` / `ticketProvider`). Every route
-resolves the clinician from **your** authenticated session and verifies — via
-`assertOwns` — that the caller owns `sessionId`; never mint/allocate for an
-arbitrary browser-supplied id (see §6).
+resolves the clinician from **your** authenticated session — never take the
+clinician email from the browser.
+
+> **Is `assertOwns` necessary?** Not for cross-clinician safety — the platform
+> already enforces it. `allocate` and `token_exchange` are **provider-ownership-bound**:
+> the token is minted _acting as the authenticated clinician_, and Amigo rejects
+> allocate / ticket mint for any `session_id` that clinician's provider entity
+> doesn't own (a foreign session → `invalid_target` at mint, `4004` at attach).
+> So a browser passing an arbitrary `sessionId` can at most reach **that same
+> clinician's own** sessions, never another clinician's. Keep `assertOwns` as
+> (a) defense-in-depth, (b) a clean `403`/`404` from your own layer instead of an
+> opaque platform error, and (c) the enforcement point if your app's access model
+> is finer-grained than "any clinician in the workspace" (e.g. this clinician may
+> not touch this appointment right now). If none of those apply, you can drop it.
 
 > **Not using the SDK on the backend?** The raw form-encoded `/token` mints and
 > REST calls in §3 are all you need — `ScribeServerClient` is a thin,
@@ -445,12 +459,21 @@ arbitrary browser-supplied id (see §6).
 
 ### 5.2 Browser
 
+**Start mic capture only once the WebSocket is open.** `connect()` resolves when
+the socket is _created_, not when it's open — the client transitions to
+`streaming` asynchronously on the WS `open` event (or fails, e.g. a rejected
+ticket → close `4001`). Starting the mic before then would drop or buffer audio
+against a socket that may never open. So gate capture on the `streaming` state
+(it also re-fires after a reconnect, and `paused`/`ended` tell you when to stop):
+
 ```ts
 import { ScribeStreamClient } from '@amigo-ai/scribe'
 import type { SttTranscriptSegment } from '@amigo-ai/scribe'
 
-// `sessionId` came from your "start recording" backend response.
+// `sessionId` came from your createScribeSession backend response.
 async function record(sessionId: string) {
+  const mic = createMicCapture() // your getUserMedia -> PCM16 pipeline (see §4)
+
   const client = new ScribeStreamClient({
     sessionId,
     // Fetch host + ticket from YOUR backend in ONE call. Re-invoked on every
@@ -464,33 +487,37 @@ async function record(sessionId: string) {
       const { host, ticket } = await r.json() // kept in memory only — never localStorage
       return { host, ticket }
     },
+    onStateChange: state => {
+      // Recording begins ONLY after the WS is open (state === 'streaming').
+      if (state === 'streaming') {
+        mic.start(chunk => client.sendAudio(chunk)) // 16 kHz mono LE PCM16
+      } else if (state === 'paused' || state === 'ended' || state === 'failed') {
+        mic.stop()
+      }
+      // On a reconnect, 'streaming' fires again; capture keeps feeding new chunks
+      // (the client re-sends only the unacked buffer itself).
+    },
     onTurn: (segment: SttTranscriptSegment) => renderTranscript(segment),
-    onStateChange: state => console.log('scribe state:', state),
     onReconnect: () => console.log('stream resumed'),
     onError: err => console.error('scribe error:', err),
   })
 
-  await client.connect() // fetch host + ticket -> open WS
+  await client.connect() // resolve host + ticket -> open WS (capture starts on 'streaming')
 
-  // You own capture. Feed 16 kHz mono little-endian PCM16 as it arrives:
-  //   client.sendAudio(pcm16Chunk) // ArrayBuffer | Uint8Array
-  // client.pause() / client.resume() to pause without tearing down the socket.
-
-  return client // call client.end() to finalize + close cleanly (1000)
+  return client // client.pause()/resume() to pause the mic; client.end() to finalize (1000)
 }
 ```
 
 `connectionProvider` (one round-trip per connect) is the preferred seam. You can
 instead pass the split `allocateProvider` + `ticketProvider` seams (two routes),
-or — for a one-shot connection where you already hold the values — static `host`
-
-- `ticket` (note: static values are reused on reconnect, so they fail once the
-  ticket expires; use `connectionProvider` for a reconnect-safe stream).
+or — for a one-shot connection where you already hold the values — static `host` +
+`ticket` (note: static values are reused on reconnect, so they fail once the
+ticket expires; use `connectionProvider` for a reconnect-safe stream).
 
 Wiring mic capture into `sendAudio` (the `getUserMedia` → PCM16 pipeline) is
 what the not-yet-shipped `ScribeRecorder` (§7) will encapsulate. Until then,
 implement the capture pipeline yourself and pipe each PCM16 chunk to
-`client.sendAudio`.
+`client.sendAudio` — starting on the `streaming` state as shown above.
 
 ---
 
