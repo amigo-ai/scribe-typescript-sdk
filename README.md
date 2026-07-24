@@ -24,9 +24,18 @@ Artifacts (note / summary / checklist / codes):
 - `generateChecklist` — `POST /v1/{workspace_id}/sessions/{session_id}/checklist`
 - `getCodes` — `GET /v1/{workspace_id}/sessions/{session_id}/codes`
 
-The browser-side WebSocket recorder (`ScribeRecorder` — PCM16 capture,
-reconnect, keepalive) is **not** in this release; it is a later addition. The
-package is browser-first (esbuild `platform: 'neutral'`, `lib` = `ES2022`+`DOM`,
+It also ships the **recording-independent streaming WebSocket API client**
+(`ScribeStreamClient`) — the WS transport/protocol layer that attaches with a
+short-lived **attach ticket**, streams **caller-supplied PCM16 bytes**, receives
+transcript frames, and handles control frames, app-level keepalive, and
+resumable reconnect. It has **no audio-capture code** (no `getUserMedia`,
+`AudioContext`, or mic): a caller feeds it PCM16 via `sendAudio`. The browser
+audio-capture recorder that drives the mic into this client is a later addition.
+Plus the pure transcript core: the wire contract (`CLIENT_FRAME`,
+`SERVER_MESSAGE`, `CLOSE_CODE`), `normalizeTurn`, the `transcriptReducer` (keyed
+on the server-owned ordinal), and `buildWsUrl`.
+
+The package is browser-first (esbuild `platform: 'neutral'`, `lib` = `ES2022`+`DOM`,
 no Node-only imports) but the REST client runs anywhere `fetch` exists.
 
 > Scribe sessions follow **REST-create → REST-allocate → WS-attach**: create a
@@ -76,6 +85,43 @@ try {
 // 3. Read the persisted transcript (after the session is finalized)
 const { segments } = await scribe.getTranscript(session.id)
 ```
+
+### Streaming WebSocket client
+
+`ScribeStreamClient` owns the worker WebSocket: it attaches with an **attach
+ticket**, streams caller-supplied PCM16, and handles keepalive + resumable
+reconnect. Auth is a purpose-built, WS-only attach ticket (aud `scribe-streaming`,
+scope `scribe:streams:connect`, ~5-min TTL) — **not** a raw provider JWT. The SDK
+never holds a provider credential or mints tickets; it calls injected seams
+(both backed by your backend, re-invoked on every reconnect):
+
+```ts
+import { ScribeStreamClient } from '@amigo-ai/scribe'
+
+const client = new ScribeStreamClient({
+  sessionId: session.id,
+  // Your backend does grant_type=token_exchange → a session-bound attach ticket.
+  ticketProvider: async sessionId => ({ ticket: await mintAttachTicket(sessionId) }),
+  // Your backend calls the Scribe allocate endpoint.
+  allocateProvider: async sessionId => allocateHost(sessionId), // → { host, expiresAt }
+  onTurn: segment => render(segment), // normalized SttTranscriptSegment (server ordinal)
+  onStateChange: state => console.log(state),
+  onReconnect: () => console.log('resumed'),
+  onError: err => console.error(err),
+})
+
+await client.connect() // allocate → mint ticket → open WS
+client.sendAudio(pcm16) // ArrayBuffer | Uint8Array — you own capture
+client.pause()
+client.resume()
+client.end() // finalize + clean close (1000)
+```
+
+Reconnect is automatic on `1012` / `1006` (never on `1000` / `4009` / `4001`):
+the client re-allocates + re-mints a ticket, reconnects the same session, sends
+`resume_from{acked_offset_bytes}`, and resends only the unacked ring-buffer
+audio. Pair `normalizeTurn` + `transcriptReducer` (or your own store) to render
+by the server-owned ordinal.
 
 ### Configuration
 
