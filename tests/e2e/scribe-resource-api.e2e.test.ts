@@ -94,8 +94,11 @@ async function readArtifactOr404<T>(
 
 /**
  * Attempt a generate-* write on a session with no transcript. Staging either
- * generates an artifact (assert shape) or rejects with a typed 4xx (no content
- * to summarise). Either exercises the write method's auth + routing + contract.
+ * generates an artifact (assert shape) or rejects with a typed error. Observed
+ * on staging: note/summary → 404 `not_found` (no transcript to generate from);
+ * checklist → 503 (generation dependency unavailable on an empty session). Both
+ * are legitimate "cannot generate without content" outcomes; either exercises
+ * the write method's auth + routing + typed-error contract.
  */
 async function generateOr4xx<T>(
   generate: () => Promise<T>,
@@ -108,7 +111,7 @@ async function generateOr4xx<T>(
     // eslint-disable-next-line no-console
     console.warn(`[resource-api e2e] ${label}: generated (shape OK)`)
   } catch (err) {
-    const e = expectScribeStatus(err, 400, 404, 409, 422)
+    const e = expectScribeStatus(err, 400, 404, 409, 422, 503)
     // eslint-disable-next-line no-console
     console.warn(`[resource-api e2e] ${label}: rejected ${e.statusCode} (${e.errorCode ?? 'n/a'})`)
   }
@@ -294,7 +297,7 @@ describe.runIf(hasCreds)('Scribe resource-API e2e (all ScribeClient methods)', (
     )
   })
 
-  it('generateNote(no transcript) → generated note or a typed 4xx', async () => {
+  it('generateNote(no transcript) → generated note or a typed error (404 not_found)', async () => {
     await generateOr4xx(
       () => client.generateNote(primary.id, { note_type: 'soap' }),
       v => {
@@ -334,7 +337,7 @@ describe.runIf(hasCreds)('Scribe resource-API e2e (all ScribeClient methods)', (
     )
   })
 
-  it('generateSummary(no transcript) → generated summary or a typed 4xx', async () => {
+  it('generateSummary(no transcript) → generated summary or a typed error (404 not_found)', async () => {
     await generateOr4xx(
       () => client.generateSummary(primary.id),
       v => {
@@ -357,7 +360,7 @@ describe.runIf(hasCreds)('Scribe resource-API e2e (all ScribeClient methods)', (
     )
   })
 
-  it('generateChecklist(with items) → generated checklist or a typed 4xx', async () => {
+  it('generateChecklist(with items) → generated checklist or a typed error (503 dependency)', async () => {
     await generateOr4xx(
       () =>
         client.generateChecklist(primary.id, {

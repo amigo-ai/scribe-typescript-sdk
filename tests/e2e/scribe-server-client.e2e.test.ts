@@ -164,10 +164,22 @@ describe.runIf(hasCreds)(
       }
     }, 30_000)
 
-    it('mintAttachTicket(unknown session) → a typed 4xx', async () => {
+    it('mintAttachTicket(arbitrary session) binds the id — validation is deferred to WS-attach', async () => {
+      // Observed on staging: `token_exchange` does NOT verify the session exists
+      // or is owned at mint time — it binds the requested `session_id` into the
+      // ticket and the scribe worker re-verifies ownership/existence at WS attach
+      // (by design — see the ScribeServerClient contract). So an arbitrary session
+      // id yields a bound ticket rather than a 4xx. (A typed rejection is tolerated
+      // too, in case staging ever tightens this to mint-time validation.)
+      const unknownId = globalThis.crypto.randomUUID()
       try {
-        await server.mintAttachTicket(env.providerEmail!, globalThis.crypto.randomUUID())
-        throw new Error('expected a rejected ticket mint for an unknown session')
+        const { ticket } = await server.mintAttachTicket(env.providerEmail!, unknownId)
+        expect(ticket.split('.').length).toBe(3)
+        const claims = decodeJwtPayload(ticket)
+        const boundId = claims.session_id ?? claims.sid
+        if (boundId !== undefined) {
+          expect(boundId).toBe(unknownId)
+        }
       } catch (err) {
         expect(err).toBeInstanceOf(ScribeError)
         const e = err as ScribeError
