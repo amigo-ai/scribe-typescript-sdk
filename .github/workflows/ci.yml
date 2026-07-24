@@ -82,4 +82,5 @@ jobs:
           SCRIBE_E2E_PROVIDER_EMAIL: ${{ secrets.SCRIBE_E2E_PROVIDER_EMAIL }}
           SCRIBE_M2M_CLIENT_ID: ${{ secrets.SCRIBE_M2M_CLIENT_ID }}
           SCRIBE_M2M_CLIENT_SECRET: ${{ secrets.SCRIBE_M2M_CLIENT_SECRET }}
-        run: npm run test:e2e -- --reporter=dot
+        # verbose so the log names each suite that actually ran (vs. skipped).
+        run: npm run test:e2e -- --reporter=verbose
