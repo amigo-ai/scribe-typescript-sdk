@@ -241,16 +241,23 @@ The SDK follows [semver](https://semver.org). It is published to npm as
 [`@amigo-ai/scribe-typescript-sdk`](https://www.npmjs.com/package/@amigo-ai/scribe-typescript-sdk) with
 [npm provenance](https://docs.npmjs.com/generating-provenance-statements).
 
-Releases are cut manually and published by CI (`.github/workflows/release.yml`),
-mirroring `@amigo-ai/platform-sdk`:
+Releases are automated by [Release Please](https://github.com/googleapis/release-please-action)
+and `.github/workflows/release.yml`:
 
-1. Bump the version: `npm version <patch|minor|major>` (updates `package.json`
-   - `package-lock.json` and creates a `vX.Y.Z` git tag).
-2. Push the commit and tag: `git push --follow-tags`.
-3. Cut a **GitHub Release** for that tag. Publishing the release triggers
-   `release.yml`, which re-validates the package
+1. Merge package changes to `main` using
+   [Conventional Commit](https://www.conventionalcommits.org/) titles. `fix:`
+   produces a patch release, `feat:` a minor release, and a breaking-change
+   marker (`feat!:` or a `BREAKING CHANGE:` footer) a major release.
+2. Release Please creates or updates a release PR containing the generated
+   changelog and `package.json` / `package-lock.json` version bump. Commits such
+   as `docs:`, `test:`, and `chore:` do not create a release on their own.
+3. Merge the release PR. Release Please creates the `vX.Y.Z` tag and GitHub
+   Release, then the workflow re-validates the package
    (`build → typecheck → test → publint + attw + npm pack`) and runs
-   `npm publish --provenance --access public`.
+   `npm publish --provenance --access public` automatically.
+
+The workflow can still be dispatched manually from a `vX.Y.Z` tag as a recovery
+path. The tag must match the version in `package.json`.
 
 Publishing uses **npm [trusted publishing](https://docs.npmjs.com/trusted-publishers)
 (OIDC)** — there is no npm token. The workflow authenticates with its
@@ -264,6 +271,9 @@ repo secrets):
   (`amigo-ai/scribe-typescript-sdk`) and workflow (`.github/workflows/release.yml`).
   This is the account/ops action that replaces provisioning a token.
 - The repository must be **public** for OIDC trusted publishing + provenance.
+- In GitHub, enable **Allow GitHub Actions to create and approve pull requests**
+  under Settings → Actions → General so Release Please can maintain its release
+  PR. It never approves the PR itself.
 
 Pre-publish validation can be run locally at any time:
 

@@ -1,9 +1,9 @@
+# yamllint disable-line rule:truthy
 name: Release
 
-# Publishes @amigo-ai/scribe-typescript-sdk to npm. Mirrors amigo-platform-typescript-sdk's
-# publish arrangement: versioning is a manual, separate step (bump package.json,
-# tag v<major>.<minor>.<patch>, and cut a GitHub Release); THIS workflow only
-# validates + publishes the tagged commit.
+# Release Please maintains a version-bump/changelog PR from releasable
+# Conventional Commits on main. Merging that PR creates a v* tag and GitHub
+# Release, then this same workflow validates and publishes the tagged package.
 #
 # Auth: npm TRUSTED PUBLISHING (OIDC) is the ONLY publish mechanism — there is
 # no npm token. `npm publish` authenticates via the workflow's `id-token: write`
@@ -15,10 +15,12 @@ name: Release
 # (amigo-ai/scribe-typescript-sdk) and workflow (`.github/workflows/release.yml`).
 # The repository must be PUBLIC for OIDC provenance + trusted publishing.
 #
-# Trigger: a published GitHub Release (preferred) or a manual workflow_dispatch
-# from a v* tag ref. The version in package.json must equal the tag.
+# Manual publishing from a v* tag and externally-created GitHub Releases remain
+# available as recovery paths. The version in package.json must equal the tag.
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
     inputs:
       expected_version:
@@ -28,20 +30,43 @@ on:
   release:
     types: [published]
 
-permissions:
-  contents: read
-  id-token: write # required for npm trusted publishing (OIDC) + provenance
-  issues: write # open a tracked issue if the npm publish fails
+permissions: {}
 
 concurrency:
   group: release-${{ github.event.release.tag_name || github.ref_name || github.run_id }}
   cancel-in-progress: false
 
 jobs:
+  release-please:
+    name: Prepare or create release
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+    steps:
+      - name: Update release pull request or create release
+        id: release
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
   publish:
     name: Publish package to npm
+    needs: release-please
+    if: >-
+      always() &&
+      (github.event_name != 'push' || needs.release-please.outputs.release_created == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write # required for npm trusted publishing (OIDC) + provenance
 
     steps:
       - name: Resolve release tag
@@ -52,8 +77,11 @@ jobs:
           REF_TYPE: ${{ github.ref_type }}
           REF_NAME: ${{ github.ref_name }}
           EXPECTED_VERSION: ${{ inputs.expected_version }}
+          AUTOMATED_TAG: ${{ needs.release-please.outputs.tag_name }}
         run: |
-          if [ "$EVENT_NAME" = "release" ]; then
+          if [ "$EVENT_NAME" = "push" ]; then
+            TAG="$AUTOMATED_TAG"
+          elif [ "$EVENT_NAME" = "release" ]; then
             TAG="$RELEASE_TAG"
           elif [ "$REF_TYPE" = "tag" ]; then
             TAG="$REF_NAME"
@@ -117,7 +145,7 @@ jobs:
           VIEW_LOG=$(mktemp)
           trap 'rm -f "$VIEW_LOG"' EXIT
           VIEW_FOUND=false
-          for attempt in 1 2; do
+          for _ in 1 2; do
             : > "$VIEW_LOG"
             if npm view "@amigo-ai/scribe-typescript-sdk@${VERSION}" version --json >"$VIEW_LOG" 2>&1; then
               VIEW_FOUND=true
@@ -151,9 +179,11 @@ jobs:
 
       - name: Publish Summary
         run: |
-          echo "## Publish Summary" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Package: @amigo-ai/scribe-typescript-sdk@${{ steps.release.outputs.version }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Tag: ${{ steps.release.outputs.tag }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Auth: npm trusted publishing (OIDC)" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Provenance: requested" >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "## Publish Summary"
+            echo ""
+            echo "- Package: @amigo-ai/scribe-typescript-sdk@${{ steps.release.outputs.version }}"
+            echo "- Tag: ${{ steps.release.outputs.tag }}"
+            echo "- Auth: npm trusted publishing (OIDC)"
+            echo "- Provenance: requested"
+          } >> "$GITHUB_STEP_SUMMARY"
