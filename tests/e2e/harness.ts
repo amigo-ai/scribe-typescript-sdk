@@ -125,3 +125,22 @@ export function claimToSet(value: unknown): Set<string> {
 export function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms))
 }
+
+/**
+ * Generate a mono 16-bit PCM sine tone (16 kHz, 440 Hz, `durationMs` long) as one
+ * little-endian `Uint8Array` — the same PCM16 shape a real recorder emits. Used
+ * to drive a live session for the resource-API lifecycle test (headless CI has
+ * no mic).
+ */
+export function synthPcm16(durationMs: number): Uint8Array {
+  const sampleRate = 16_000
+  const freq = 440
+  const nSamples = Math.floor((sampleRate * durationMs) / 1000)
+  const buf = new ArrayBuffer(nSamples * 2)
+  const view = new DataView(buf)
+  for (let i = 0; i < nSamples; i++) {
+    const sample = Math.round(Math.sin((2 * Math.PI * freq * i) / sampleRate) * 0.3 * 32767)
+    view.setInt16(i * 2, sample, true)
+  }
+  return new Uint8Array(buf)
+}

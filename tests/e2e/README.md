@@ -17,7 +17,16 @@ Retry-After`), get-transcript, and the artifact read/generate/finalize
    fetch; `invalid_target`; email normalisation), `clearTokenCache`, `scribe()`,
    `createSession`, `allocate`, `mintAttachTicket` (`token_exchange`;
    `aud`/`scope`/TTL correctness), and `prepareConnection`.
-3. **`scribe-streaming.e2e.test.ts`** — the full in-person path through the SDK
+3. **`scribe-session-lifecycle.e2e.test.ts`** — the artifact resource APIs in the
+   **logical order of a real session**: create → start stream → stream audio →
+   generate checklist (mid-session) → stream more → generate checklist → end
+   stream → generate note + summary → read every persisted artifact
+   (transcript/note/summary/checklist/codes). Spins up a live session ONLY as the
+   content source the artifact APIs need; it does **not** re-assert the WS
+   transport (that is suite 4 / phase 15). Synthetic PCM16 yields little/no
+   transcript, so generate/read are asserted tolerantly — the value is exercising
+   the methods in the correct sequence against a real, streamed, ended session.
+4. **`scribe-streaming.e2e.test.ts`** — the full in-person path through the SDK
    (`ScribeServerClient.prepareConnection` → `ScribeStreamClient.connect()` →
    synthetic PCM16 → acks/pong → `end()`). **Phase 15**; the WS streaming/audio
    round-trip is NOT duplicated by the resource-API suites.
