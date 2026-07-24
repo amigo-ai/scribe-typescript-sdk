@@ -65,9 +65,13 @@ absent.
 
 ## CI
 
-The streaming suite runs in CI (`.github/workflows/ci.yml` `e2e` job) on pushes
-to `main` and same-repo PRs, using repo secrets `SCRIBE_E2E_BASE_URL`,
-`SCRIBE_E2E_IDENTITY_BASE_URL`, `SCRIBE_E2E_WORKSPACE_ID`,
-`SCRIBE_E2E_PROVIDER_EMAIL`, `SCRIBE_M2M_CLIENT_ID`, `SCRIBE_M2M_CLIENT_SECRET`.
-Fork PRs (no secrets) skip the job. The M2M `client_secret` is stored only as a
-GitHub Actions secret — never committed or logged.
+Both suites run in CI (`.github/workflows/ci.yml` `e2e` job) on pushes to `main`
+and same-repo PRs. Config is split by sensitivity:
+
+- **Repository variables** (non-sensitive): `SCRIBE_E2E_BASE_URL`,
+  `SCRIBE_E2E_IDENTITY_BASE_URL`.
+- **Repository secrets**: `SCRIBE_E2E_WORKSPACE_ID`, `SCRIBE_E2E_PROVIDER_EMAIL`,
+  `SCRIBE_M2M_CLIENT_ID`, `SCRIBE_M2M_CLIENT_SECRET`.
+
+Fork PRs skip the job (secrets/vars withheld). The M2M `client_secret` is stored
+only as a GitHub Actions secret — never committed or logged.
