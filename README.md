@@ -241,19 +241,20 @@ The SDK follows [semver](https://semver.org). It is published to npm as
 [`@amigo-ai/scribe-typescript-sdk`](https://www.npmjs.com/package/@amigo-ai/scribe-typescript-sdk) with
 [npm provenance](https://docs.npmjs.com/generating-provenance-statements).
 
-Releases are automated by [Release Please](https://github.com/googleapis/release-please-action)
-and `.github/workflows/release.yml`:
+Releases are automated directly by `.github/workflows/release.yml`, without a
+third-party release action:
 
 1. Merge source-code changes under `src/` to `main` using
    [Conventional Commit](https://www.conventionalcommits.org/) titles. `fix:`
    produces a patch release, `feat:` a minor release, and a breaking-change
    marker (`feat!:` or a `BREAKING CHANGE:` footer) a major release.
-2. Release Please creates or updates a release PR containing the generated
-   changelog and `package.json` / `package-lock.json` version bump. Changes
-   outside `src/` do not trigger the automated release flow, regardless of
-   commit type.
-3. Merge the release PR. Release Please creates the `vX.Y.Z` tag and GitHub
-   Release, then the workflow re-validates the package
+2. The workflow examines commit subjects and bodies since the latest `vX.Y.Z`
+   tag, calculates the next version, and creates a tag-only commit containing
+   the corresponding `package.json` / `package-lock.json` version bump. Changes
+   outside `src/` do not trigger the automated release flow.
+3. The workflow pushes the annotated tag and creates a GitHub Release whose
+   generated notes cover the commits since the previous release tag. It then
+   re-validates the package
    (`build → typecheck → test → publint + attw + npm pack`) and runs
    `npm publish --provenance --access public` automatically.
 
@@ -264,7 +265,7 @@ Publishing uses **npm [trusted publishing](https://docs.npmjs.com/trusted-publis
 (OIDC)** — there is no npm token. The workflow authenticates with its
 `id-token: write` OIDC token, which also produces the provenance attestation.
 
-Before the first publish can succeed, three one-time setup steps are required (no
+Before the first publish can succeed, two one-time setup steps are required (no
 repo secrets):
 
 - **Configure a trusted publisher** for `@amigo-ai/scribe-typescript-sdk` on npmjs.com
@@ -272,9 +273,6 @@ repo secrets):
   (`amigo-ai/scribe-typescript-sdk`) and workflow (`.github/workflows/release.yml`).
   This is the account/ops action that replaces provisioning a token.
 - The repository must be **public** for OIDC trusted publishing + provenance.
-- In GitHub, enable **Allow GitHub Actions to create and approve pull requests**
-  under Settings → Actions → General so Release Please can maintain its release
-  PR. It never approves the PR itself.
 
 Pre-publish validation can be run locally at any time:
 
