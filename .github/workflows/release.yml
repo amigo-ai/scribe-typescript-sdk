@@ -1,100 +1,170 @@
 name: Release
 
-# Present but NOT yet active. First npm publish of @amigo-ai/scribe is a later
-# phase of the scribe-streaming plan (SDK phase 17). This workflow is
-# manual-dispatch only and mirrors amigo-typescript-sdk's publish arrangement
-# (GitHub App token for the version-bump commit + NPM_TOKEN for publish).
+# Publishes @amigo-ai/scribe-typescript-sdk to npm. Mirrors amigo-platform-typescript-sdk's
+# publish arrangement: versioning is a manual, separate step (bump package.json,
+# tag v<major>.<minor>.<patch>, and cut a GitHub Release); THIS workflow only
+# validates + publishes the tagged commit.
 #
-# Before first use, provision org/repo secrets: RELEASE_BOT_APP_ID,
-# RELEASE_BOT_PRIVATE_KEY, NPM_TOKEN. Provenance is emitted only when the repo
-# is public (currently private).
+# Auth: npm TRUSTED PUBLISHING (OIDC) is the ONLY publish mechanism — there is
+# no npm token. `npm publish` authenticates via the workflow's `id-token: write`
+# OIDC token, and provenance is generated from the public Actions run.
+#
+# One-time setup before the first publish (human/ops, done on npmjs.com — NOT a
+# repo secret): configure a **trusted publisher** for `@amigo-ai/scribe-typescript-sdk` at
+# https://www.npmjs.com/package/@amigo-ai/scribe-typescript-sdk/access pointing at this repo
+# (amigo-ai/scribe-typescript-sdk) and workflow (`.github/workflows/release.yml`).
+# The repository must be PUBLIC for OIDC provenance + trusted publishing.
+#
+# Trigger: a published GitHub Release (preferred) or a manual workflow_dispatch
+# from a v* tag ref. The version in package.json must equal the tag.
 
 on:
   workflow_dispatch:
     inputs:
-      version_type:
-        description: 'Version increment type'
-        required: true
-        default: 'patch'
-        type: choice
-        options:
-          - patch
-          - minor
-          - major
-      dry_run:
-        description: 'Dry run (skip publish, commits, tags)'
+      expected_version:
+        description: 'Expected package version without the leading v'
         required: false
-        default: true
-        type: boolean
+        type: string
+  release:
+    types: [published]
 
 permissions:
-  contents: write
-  id-token: write
+  contents: read
+  id-token: write # required for npm trusted publishing (OIDC) + provenance
+  issues: write # open a tracked issue if the npm publish fails
+
+concurrency:
+  group: release-${{ github.event.release.tag_name || github.ref_name || github.run_id }}
+  cancel-in-progress: false
 
 jobs:
-  release:
+  publish:
+    name: Publish package to npm
     runs-on: ubuntu-latest
-    steps:
-      - name: Generate GitHub App token
-        id: app-token
-        uses: actions/create-github-app-token@v2
-        with:
-          app-id: ${{ secrets.RELEASE_BOT_APP_ID }}
-          private-key: ${{ secrets.RELEASE_BOT_PRIVATE_KEY }}
+    timeout-minutes: 20
 
-      - name: Checkout code
-        uses: actions/checkout@v4
+    steps:
+      - name: Resolve release tag
+        id: release
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+          EXPECTED_VERSION: ${{ inputs.expected_version }}
+        run: |
+          if [ "$EVENT_NAME" = "release" ]; then
+            TAG="$RELEASE_TAG"
+          elif [ "$REF_TYPE" = "tag" ]; then
+            TAG="$REF_NAME"
+          else
+            echo "::error::Publish must run from a release event or a v* tag ref."
+            exit 1
+          fi
+
+          if ! printf '%s' "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Publish tag must match v<major>.<minor>.<patch>. Found: ${TAG}"
+            exit 1
+          fi
+
+          VERSION="${TAG#v}"
+          if [ -n "$EXPECTED_VERSION" ] && [ "$EXPECTED_VERSION" != "$VERSION" ]; then
+            echo "::error::Expected version ${EXPECTED_VERSION}, but tag ${TAG} resolves to ${VERSION}."
+            exit 1
+          fi
+
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout release tag
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          ref: ${{ steps.release.outputs.tag }}
           fetch-depth: 0
-          token: ${{ steps.app-token.outputs.token }}
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
         with:
-          node-version: '22'
+          node-version: '24'
           cache: 'npm'
           registry-url: 'https://registry.npmjs.org'
+
+      - name: Install npm 11
+        # Trusted publishing (OIDC) requires npm >= 11.5.1.
+        run: npm install --global npm@11.13.0
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Lint, build, test
+      - name: Verify OIDC is available
         run: |
-          npm run lint
-          npm run build
-          npm test -- --reporter=dot
-
-      - name: Configure git
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-
-      - name: Increment version
-        id: new_version
-        run: |
-          if [ "${{ inputs.dry_run }}" = "true" ]; then
-            NEW_VERSION=$(npm version ${{ inputs.version_type }} --no-git-tag-version --dry-run)
-            echo "version=${NEW_VERSION#v}" >> $GITHUB_OUTPUT
-          else
-            npm version ${{ inputs.version_type }} --no-git-tag-version
-            echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
+          if [ -z "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ] || [ -z "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" ]; then
+            echo "::error::GitHub OIDC token request variables are unavailable. This workflow publishes via npm trusted publishing only — ensure 'permissions: id-token: write' is set and a trusted publisher is configured for @amigo-ai/scribe-typescript-sdk on npmjs.com."
+            exit 1
           fi
+          echo "OIDC available; publishing via npm trusted publishing."
 
-      - name: Publish to npm
-        if: ${{ !inputs.dry_run }}
+      - name: Validate release package
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          VERSION: ${{ steps.release.outputs.version }}
         run: |
-          PROV_FLAG=""
-          if [ "${{ github.repository_visibility }}" = "public" ]; then
-            PROV_FLAG="--provenance"
+          PACKAGE_VERSION=$(node -p "require('./package.json').version")
+          if [ "$PACKAGE_VERSION" != "$VERSION" ]; then
+            echo "::error::package.json version ${PACKAGE_VERSION} does not match release tag v${VERSION}."
+            exit 1
           fi
-          npm publish $PROV_FLAG --access public
 
-      - name: Commit version bump + tag
-        if: ${{ !inputs.dry_run }}
+          VIEW_LOG=$(mktemp)
+          trap 'rm -f "$VIEW_LOG"' EXIT
+          VIEW_FOUND=false
+          for attempt in 1 2; do
+            : > "$VIEW_LOG"
+            if npm view "@amigo-ai/scribe-typescript-sdk@${VERSION}" version --json >"$VIEW_LOG" 2>&1; then
+              VIEW_FOUND=true
+              break
+            fi
+            if grep -Eq 'E404|"code"[[:space:]]*:[[:space:]]*"E404"|404 Not Found' "$VIEW_LOG"; then
+              break
+            fi
+            echo "npm view failed for @amigo-ai/scribe-typescript-sdk@${VERSION}; retrying once."
+            sleep 10
+          done
+
+          if [ "$VIEW_FOUND" = "true" ]; then
+            echo "::error::@amigo-ai/scribe-typescript-sdk@${VERSION} is already published on npm."
+            exit 1
+          fi
+
+          if grep -Eq 'E404|"code"[[:space:]]*:[[:space:]]*"E404"|404 Not Found' "$VIEW_LOG"; then
+            echo "@amigo-ai/scribe-typescript-sdk@${VERSION} is not published yet."
+          else
+            echo "::error::Unable to verify npm publication state for @amigo-ai/scribe-typescript-sdk@${VERSION}."
+            cat "$VIEW_LOG"
+            exit 1
+          fi
+
+      - name: Verify package (build + typecheck + test + publint/attw/pack)
+        run: npm run prepublishOnly
+
+      - name: Publish to npm (trusted publishing / OIDC)
+        run: npm publish --access public --provenance
+
+      - name: Publish Summary
         run: |
-          git add package.json package-lock.json || true
-          git commit -m "Release v${{ steps.new_version.outputs.version }}"
-          git tag -a "v${{ steps.new_version.outputs.version }}" -m "Release v${{ steps.new_version.outputs.version }}"
-          git push origin HEAD --tags
+          echo "## Publish Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Package: @amigo-ai/scribe-typescript-sdk@${{ steps.release.outputs.version }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Tag: ${{ steps.release.outputs.tag }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Auth: npm trusted publishing (OIDC)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Provenance: requested" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Open issue on publish failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ steps.release.outputs.tag || github.ref_name }}"
+          gh issue create --repo "$GITHUB_REPOSITORY" \
+            --title "npm publish FAILED: @amigo-ai/scribe-typescript-sdk ${TAG}" \
+            --body "release.yml failed — \`@amigo-ai/scribe-typescript-sdk@${{ steps.release.outputs.version || 'unknown' }}\` did NOT publish to npm. Investigate and re-run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+          || echo "::error::npm publish failed for ${TAG} AND could not open a tracking issue — see this run."

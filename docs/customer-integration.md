@@ -1,11 +1,11 @@
 # Scribe streaming — customer integration guide
 
 This is the single document a customer engineer follows to go from **zero → a
-working in-person Scribe recording** using `@amigo-ai/scribe`.
+working in-person Scribe recording** using `@amigo-ai/scribe-typescript-sdk`.
 
 It integrates in-person Scribe streaming with the **split-trust** model: your
 **backend** is a confidential machine-to-machine (M2M) client that holds the
-secret and mints tokens; your **browser** runs `@amigo-ai/scribe` and streams
+secret and mints tokens; your **browser** runs `@amigo-ai/scribe-typescript-sdk` and streams
 audio with only a short-lived, single-session **attach ticket**. The secret and
 the provider JWT never leave your server.
 
@@ -193,6 +193,17 @@ audience: an attach ticket is rejected at every REST endpoint, and a REST
 provider JWT is rejected at the WebSocket. The two credentials are not
 interchangeable.
 
+### 2.4 Install the SDK
+
+Both the backend and the browser import from the same ESM-only package:
+
+```bash
+npm i @amigo-ai/scribe-typescript-sdk
+```
+
+Requires Node.js ≥ 20 on the backend, and any modern browser (`fetch` +
+`WebSocket`) on the client.
+
 ---
 
 ## 3. Backend integration
@@ -298,7 +309,7 @@ subject is rejected. Only a full provider JWT can mint a ticket.
 
 ---
 
-## 4. Browser integration (`@amigo-ai/scribe`)
+## 4. Browser integration (`@amigo-ai/scribe-typescript-sdk`)
 
 The browser uses `ScribeStreamClient` — the recording-independent WebSocket
 client. It attaches with an attach ticket, streams caller-supplied PCM16, and
@@ -388,7 +399,7 @@ with your workspace + M2M credentials; every method takes the clinician's email
 (from YOUR authenticated app session — never the browser).
 
 ```ts
-import { ScribeServerClient } from '@amigo-ai/scribe'
+import { ScribeServerClient } from '@amigo-ai/scribe-typescript-sdk'
 
 const server = new ScribeServerClient({
   identityBaseUrl: 'https://api.platform.amigo.ai', // identity /token (mints)
@@ -454,8 +465,8 @@ against a socket that may never open. So gate capture on the `streaming` state
 (it also re-fires after a reconnect, and `paused`/`ended` tell you when to stop):
 
 ```ts
-import { ScribeStreamClient } from '@amigo-ai/scribe'
-import type { SttTranscriptSegment } from '@amigo-ai/scribe'
+import { ScribeStreamClient } from '@amigo-ai/scribe-typescript-sdk'
+import type { SttTranscriptSegment } from '@amigo-ai/scribe-typescript-sdk'
 
 // `sessionId` came from your createScribeSession backend response.
 async function record(sessionId: string) {
@@ -563,7 +574,7 @@ SDK (phase 16; no release contains it at the time of writing). Its intended
 shape (from the phase-16 design, subject to change until it ships):
 
 ```ts
-// PENDING — not yet available in @amigo-ai/scribe (phase 16, in progress).
+// PENDING — not yet available in @amigo-ai/scribe-typescript-sdk (phase 16, in progress).
 const recorder = new ScribeRecorder({
   sessionId,
   ticketProvider, // same seams as ScribeStreamClient

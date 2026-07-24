@@ -1,4 +1,4 @@
-# @amigo-ai/scribe
+# @amigo-ai/scribe-typescript-sdk
 
 Framework-agnostic TypeScript SDK for the Amigo **Scribe** streaming service.
 
@@ -61,16 +61,16 @@ clients:
 ## Install
 
 ```bash
-npm install @amigo-ai/scribe
+npm i @amigo-ai/scribe-typescript-sdk
 ```
 
-> Not yet published to npm — the first publish is a later phase of the
-> scribe-streaming rollout.
+Requires Node.js ≥ 20 (or any modern browser / runtime with `fetch` +
+`WebSocket`). The package is **ESM-only** — use `import`, not `require`.
 
 ## Usage
 
 ```ts
-import { ScribeClient, ServiceUnavailableError } from '@amigo-ai/scribe'
+import { ScribeClient, ServiceUnavailableError } from '@amigo-ai/scribe-typescript-sdk'
 
 const scribe = new ScribeClient({
   // Scribe API (CRUD) host — production. (Staging: https://scribe-staging.platform.amigo.ai)
@@ -109,7 +109,7 @@ credentials and encapsulates the two mints + CRUD. **Never import it into a
 browser bundle.**
 
 ```ts
-import { ScribeServerClient } from '@amigo-ai/scribe'
+import { ScribeServerClient } from '@amigo-ai/scribe-typescript-sdk'
 
 const server = new ScribeServerClient({
   identityBaseUrl: 'https://api.platform.amigo.ai', // identity /token (mints)
@@ -146,7 +146,7 @@ never holds a provider credential or mints tickets; it resolves a host + ticket
 from your backend via one of three seams (re-invoked on every reconnect):
 
 ```ts
-import { ScribeStreamClient } from '@amigo-ai/scribe'
+import { ScribeStreamClient } from '@amigo-ai/scribe-typescript-sdk'
 
 const client = new ScribeStreamClient({
   sessionId: session.id,
@@ -200,16 +200,21 @@ with `retryAfterSeconds`). Transport failures throw `NetworkError`.
 npm install
 npm run openapi:sync     # refresh openapi/scribe.json from production (network)
 npm run generate:schema  # regenerate src/generated/openapi.ts from openapi/scribe.json
-npm run build            # esbuild (ESM) + tsc --emitDeclarationOnly (.d.ts)
+npm run build            # esbuild (ESM) + tsc (.d.ts) + NodeNext .js-extension fixup
 npm run lint
 npm test                 # unit tests (mocked transport)
 npm run test:e2e         # gated E2E — see tests/e2e/README.md (skips without creds)
+npm run validate         # publint + attw + npm pack --dry-run (pre-publish checks)
 ```
 
 **Packaging.** The SDK is **ESM-only** (`"type": "module"`): a single ESM entry
-point (`dist/index.mjs`) built with esbuild plus `tsc --emitDeclarationOnly` for
-the `.d.ts` types, exported through the `exports` map (`types`/`import`). There is
-no CommonJS build.
+point (`dist/index.mjs`) built with esbuild plus `tsc` for the `.d.ts` types,
+exported through the `exports` map (`types`/`import`). There is no CommonJS build.
+`tsc` emits declarations with extensionless relative imports, which Node's
+NodeNext ESM resolver rejects; `scripts/fix-dts-extensions.mjs` rewrites those to
+explicit `.js` specifiers post-build so `@arethetypeswrong/cli` (attw) resolves
+the types cleanly. Validate with `npm run validate` (publint + attw + `npm pack
+--dry-run`).
 
 **Wire types.** The REST wire types in `src/types.ts` are derived from the Scribe
 service's **production OpenAPI document**
@@ -229,6 +234,43 @@ PR if `src/generated/openapi.ts` is out of sync with the vendored spec (the
 `--url <https url>` or `--spec <local file>` overrides; the default source is the
 production URL. The generated module is types-only — nothing is added to the
 runtime bundle.
+
+## Versioning & releases
+
+The SDK follows [semver](https://semver.org). It is published to npm as
+[`@amigo-ai/scribe-typescript-sdk`](https://www.npmjs.com/package/@amigo-ai/scribe-typescript-sdk) with
+[npm provenance](https://docs.npmjs.com/generating-provenance-statements).
+
+Releases are cut manually and published by CI (`.github/workflows/release.yml`),
+mirroring `@amigo-ai/platform-sdk`:
+
+1. Bump the version: `npm version <patch|minor|major>` (updates `package.json`
+   - `package-lock.json` and creates a `vX.Y.Z` git tag).
+2. Push the commit and tag: `git push --follow-tags`.
+3. Cut a **GitHub Release** for that tag. Publishing the release triggers
+   `release.yml`, which re-validates the package
+   (`build → typecheck → test → publint + attw + npm pack`) and runs
+   `npm publish --provenance --access public`.
+
+Publishing uses **npm [trusted publishing](https://docs.npmjs.com/trusted-publishers)
+(OIDC)** — there is no npm token. The workflow authenticates with its
+`id-token: write` OIDC token, which also produces the provenance attestation.
+
+Before the first publish can succeed, two one-time setup steps are required (no
+repo secrets):
+
+- **Configure a trusted publisher** for `@amigo-ai/scribe-typescript-sdk` on npmjs.com
+  (Package → Settings → Trusted Publisher) pointing at this repository
+  (`amigo-ai/scribe-typescript-sdk`) and workflow (`.github/workflows/release.yml`).
+  This is the account/ops action that replaces provisioning a token.
+- The repository must be **public** for OIDC trusted publishing + provenance.
+
+Pre-publish validation can be run locally at any time:
+
+```bash
+npm run build
+npm run validate   # publint + attw (are-the-types-wrong) + npm pack --dry-run
+```
 
 ## License
 

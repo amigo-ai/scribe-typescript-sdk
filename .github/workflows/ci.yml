@@ -41,6 +41,9 @@ jobs:
       - name: Build (esbuild ESM + tsc types)
         run: npm run build
 
+      - name: Validate package (publint + attw + npm pack dry-run)
+        run: npm run validate
+
       - name: Run unit tests
         run: npm test -- --reporter=dot
 

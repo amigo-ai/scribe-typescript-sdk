@@ -1,17 +1,55 @@
 {
-  "name": "@amigo-ai/scribe",
-  "version": "0.0.0",
+  "name": "@amigo-ai/scribe-typescript-sdk",
+  "version": "0.1.0",
   "description": "Framework-agnostic TypeScript SDK for the Amigo Scribe streaming service",
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "provenance": true
   },
-  "main": "./dist/index.mjs",
+  "keywords": [
+    "amigo",
+    "scribe",
+    "sdk",
+    "ai",
+    "transcription",
+    "streaming",
+    "websocket"
+  ],
+  "homepage": "https://github.com/amigo-ai/scribe-typescript-sdk#readme",
+  "bugs": {
+    "url": "https://github.com/amigo-ai/scribe-typescript-sdk/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/amigo-ai/scribe-typescript-sdk.git"
+  },
+  "license": "MIT",
+  "author": "Amigo Inc.",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/types/index.d.ts",
+      "import": {
+        "types": "./dist/types/index.d.ts",
+        "default": "./dist/index.mjs"
+      }
+    },
+    "./package.json": "./package.json"
+  },
   "types": "./dist/types/index.d.ts",
   "files": [
-    "dist"
+    "dist/",
+    "docs/",
+    "README.md",
+    "LICENSE"
   ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "scripts": {
-    "build": "node scripts/build.mjs && tsc --project tsconfig.build.json",
+    "clean": "rm -rf dist",
+    "build": "node scripts/build.mjs && tsc --project tsconfig.build.json && node scripts/fix-dts-extensions.mjs",
     "dev": "node scripts/build.mjs --watch",
     "openapi:sync": "node scripts/sync-openapi.mjs",
     "generate:schema": "openapi-typescript openapi/scribe.json -o src/generated/openapi.ts",
@@ -19,32 +57,21 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage --project unit",
     "test:e2e": "vitest run --project e2e",
+    "typecheck": "tsc --noEmit",
     "format": "prettier --check .",
     "format:write": "prettier --write .",
     "lint": "eslint 'src/**/*.{ts,tsx}' --max-warnings 0",
     "lint:fix": "eslint 'src/**/*.{ts,tsx}' --fix",
-    "pack:local": "npm run build && rm -rf artifacts && mkdir -p artifacts && TARBALL=$(npm pack) && mv \"$TARBALL\" artifacts/ && echo Packed: artifacts/$TARBALL"
+    "validate:publint": "publint",
+    "validate:attw": "node scripts/check-attw.mjs",
+    "validate:pack": "npm pack --dry-run",
+    "validate": "npm run validate:publint && npm run validate:attw && npm run validate:pack",
+    "pack:local": "npm run build && rm -rf artifacts && mkdir -p artifacts && TARBALL=$(npm pack) && mv \"$TARBALL\" artifacts/ && echo Packed: artifacts/$TARBALL",
+    "prepublishOnly": "npm run build && npm run typecheck && npm test && npm run validate"
   },
-  "exports": {
-    ".": {
-      "types": "./dist/types/index.d.ts",
-      "import": "./dist/index.mjs"
-    },
-    "./package.json": "./package.json"
-  },
-  "type": "module",
-  "sideEffects": false,
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/amigo-ai/scribe-typescript-sdk.git"
-  },
-  "author": "Amigo AI",
-  "license": "MIT",
-  "bugs": {
-    "url": "https://github.com/amigo-ai/scribe-typescript-sdk/issues"
-  },
-  "homepage": "https://github.com/amigo-ai/scribe-typescript-sdk#readme",
   "devDependencies": {
+    "@andrewbranch/untar.js": "1.0.3",
+    "@arethetypeswrong/cli": "0.18.2",
     "@eslint/js": "^9.32.0",
     "@types/node": "^24.2.0",
     "@typescript-eslint/eslint-plugin": "^8.39.0",
@@ -57,6 +84,7 @@
     "globals": "^16.3.0",
     "openapi-typescript": "^7.13.0",
     "prettier": "^3.6.2",
+    "publint": "0.3.14",
     "typescript": "^5.9.2",
     "vitest": "^3.2.4"
   }
