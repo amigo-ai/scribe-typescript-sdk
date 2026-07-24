@@ -11,15 +11,20 @@
 // Auth is a purpose-built, WebSocket-only **attach ticket** (aud=scribe-streaming,
 // scope scribe:streams:connect, ~5-min TTL) — NOT a raw provider JWT. The SDK
 // never holds a provider credential, never mints tickets, and never talks to
-// k8s; it calls injected seams:
-//   - ticketProvider:   (sessionId) => Promise<{ticket, expiresAt?}>
-//         the consumer's backend does `grant_type=token_exchange` off its M2M
-//         provider JWT and returns a session-bound attach ticket. Re-invoked on
-//         every (re)connect (the ticket TTL ≪ a session, so a reconnect must
-//         never reuse a stale ticket).
-//   - allocateProvider: (sessionId) => Promise<{host, expiresAt}>
-//         backed by the consumer's backend calling the Scribe allocate endpoint.
-//         Re-invoked on every reconnect (a new GameServer = a new host).
+// k8s; it obtains a host + ticket per (re)connect from ONE of three configured
+// seams (see ScribeStreamClientOptions):
+//   - connectionProvider: (sessionId) => Promise<{host, ticket, ...}>  (PREFERRED)
+//         one call for both, backed by the consumer's backend calling
+//         `ScribeServerClient.prepareConnection`. Re-invoked on every (re)connect.
+//   - allocateProvider + ticketProvider  (split seams)
+//         allocateProvider: (sessionId) => Promise<{host, expiresAt}>  and
+//         ticketProvider:   (sessionId) => Promise<{ticket, expiresAt?}>,
+//         backed by the backend's allocate + `grant_type=token_exchange`.
+//         Re-invoked on every (re)connect (the ticket TTL ≪ a session, so a
+//         reconnect must never reuse a stale ticket; a reconnect lands on a new host).
+//   - host + ticket  (static, one-shot)
+//         concrete values already fetched from the backend; reused verbatim on
+//         reconnect (so a reconnect fails once the ticket expires).
 // Ordinals are server-owned (decision 6.i): the client does no re-basing — it
 // forwards onTurn by ordinal; re-delivery overwrites downstream by ordinal.
 
@@ -60,6 +65,23 @@ export interface StreamAllocation {
 }
 
 /**
+ * A resolved streaming connection — the host to attach to plus the WS-only
+ * attach ticket, as returned by {@link ScribeStreamClientOptions.connectionProvider}.
+ * This is exactly the browser-safe bundle a server-side `prepareConnection`
+ * produces (minus `sessionId`, which the client already holds).
+ */
+export interface StreamConnectionInfo {
+  /** `<gameserver_name>.<scribe-actors-domain>` — the WS routing host. */
+  host: string
+  /** WS-only attach ticket (sent as the second WS subprotocol value). */
+  ticket: string
+  /** Optional ISO-8601 expiry of the allocation lease (informational). */
+  hostExpiresAt?: string
+  /** Optional ISO-8601 expiry of the attach ticket (informational). */
+  ticketExpiresAt?: string
+}
+
+/**
  * Minimal WebSocket surface the client uses. The browser `WebSocket` satisfies
  * it; tests inject a fake. (Node has no global `WebSocket` in older runtimes —
  * this keeps the client transport-agnostic.)
@@ -77,17 +99,36 @@ export interface ScribeStreamClientOptions {
   /** Platform `session_id` from create-session — the attach correlation key. */
   sessionId: string
   /**
+   * Resolve host + attach ticket in one call (PREFERRED). Re-invoked on every
+   * (re)connect, so it always yields a fresh host + ticket. Backed by the
+   * consumer's backend calling `ScribeServerClient.prepareConnection` (or an
+   * equivalent allocate + `token_exchange`). Use this OR the split
+   * `allocateProvider` + `ticketProvider` seams OR a static `host` + `ticket`.
+   */
+  connectionProvider?: (sessionId: string) => Promise<StreamConnectionInfo>
+  /**
    * Mint a fresh WebSocket-only attach ticket bound to `sessionId`. Re-invoked
    * on every (re)connect. Backed by the consumer's backend doing
-   * `grant_type=token_exchange`.
+   * `grant_type=token_exchange`. Required (with `allocateProvider`) unless
+   * `connectionProvider` or a static `host` + `ticket` is given.
    */
-  ticketProvider: (sessionId: string) => Promise<AttachTicket>
+  ticketProvider?: (sessionId: string) => Promise<AttachTicket>
   /**
    * Allocate a streaming GameServer for `sessionId`. Re-invoked on every
    * reconnect (a new GameServer = a new host). Backed by the consumer's backend
-   * calling the Scribe allocate endpoint.
+   * calling the Scribe allocate endpoint. Required (with `ticketProvider`)
+   * unless `connectionProvider` or a static `host` + `ticket` is given.
    */
-  allocateProvider: (sessionId: string) => Promise<StreamAllocation>
+  allocateProvider?: (sessionId: string) => Promise<StreamAllocation>
+  /**
+   * Static WS host to attach to. Use with `ticket` for a one-shot connection
+   * (e.g. host + ticket already fetched from your backend). NOTE: static
+   * credentials are reused verbatim on reconnect, so a reconnect will fail once
+   * the ticket expires — use `connectionProvider` for a reconnect-safe stream.
+   */
+  host?: string
+  /** Static attach ticket to attach with. Use with `host` (see its note). */
+  ticket?: string
   /** A normalized transcript segment arrived. */
   onTurn?: (segment: SttTranscriptSegment) => void
   /** The state machine transitioned. */
@@ -138,11 +179,23 @@ export class ScribeStreamClient {
     if (!opts?.sessionId) {
       throw new Error('sessionId is required')
     }
-    if (typeof opts.ticketProvider !== 'function') {
-      throw new Error('ticketProvider is required')
-    }
-    if (typeof opts.allocateProvider !== 'function') {
-      throw new Error('allocateProvider is required')
+    // One of three connection modes must be supplied: a unified
+    // connectionProvider, a static host + ticket, or the split provider seams.
+    if (opts.connectionProvider !== undefined) {
+      if (typeof opts.connectionProvider !== 'function') {
+        throw new Error('connectionProvider must be a function')
+      }
+    } else if (opts.host !== undefined || opts.ticket !== undefined) {
+      if (!opts.host || !opts.ticket) {
+        throw new Error('both host and ticket are required for a static connection')
+      }
+    } else {
+      if (typeof opts.ticketProvider !== 'function') {
+        throw new Error('ticketProvider is required')
+      }
+      if (typeof opts.allocateProvider !== 'function') {
+        throw new Error('allocateProvider is required')
+      }
     }
     this.opts = opts
     this.factory = opts.webSocketFactory ?? defaultWebSocketFactory
@@ -260,13 +313,29 @@ export class ScribeStreamClient {
 
   // --- transport ---------------------------------------------------------
 
+  /**
+   * Resolve the host + attach ticket for a (re)connect from whichever seam the
+   * caller configured. A fresh ticket + host are obtained on every (re)connect
+   * (the ticket TTL ~5 min ≪ a session, and a reconnect lands on a new
+   * GameServer) — except in static `host` + `ticket` mode, which reuses them.
+   */
+  private async resolveConnection(sessionId: string): Promise<{ host: string; ticket: string }> {
+    if (this.opts.connectionProvider) {
+      const conn = await this.opts.connectionProvider(sessionId)
+      return { host: conn.host, ticket: conn.ticket }
+    }
+    if (this.opts.host && this.opts.ticket) {
+      return { host: this.opts.host, ticket: this.opts.ticket }
+    }
+    // Split-seam mode: allocate first (new host), then mint the ticket.
+    const allocation = await this.opts.allocateProvider!(sessionId)
+    const { ticket } = await this.opts.ticketProvider!(sessionId)
+    return { host: allocation.host, ticket }
+  }
+
   private async openSocket(resumeFromOffset: number, isReconnect: boolean): Promise<void> {
-    // allocate → mint ticket → open WS. A fresh ticket + host are obtained on
-    // every (re)connect: the ticket TTL (~5 min) is far shorter than a session,
-    // and a reconnect lands on a new GameServer.
-    const allocation = await this.opts.allocateProvider(this.opts.sessionId)
-    const { ticket } = await this.opts.ticketProvider(this.opts.sessionId)
-    const url = buildWsUrl(allocation.host, this.opts.sessionId)
+    const { host, ticket } = await this.resolveConnection(this.opts.sessionId)
+    const url = buildWsUrl(host, this.opts.sessionId)
 
     const socket = this.factory(url, ['auth', ticket])
     socket.binaryType = 'arraybuffer'

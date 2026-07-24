@@ -21,15 +21,21 @@ export { HttpClient } from './http'
 export * from './types'
 export * from './errors'
 
-// --- Streaming WebSocket API client ---
+// --- Streaming WebSocket API client (browser / public half) ---
 export { ScribeStreamClient } from './stream-client'
 export type {
   ScribeStreamClientOptions,
   ScribeStreamState,
   AttachTicket,
   StreamAllocation,
+  StreamConnectionInfo,
   WsLike,
 } from './stream-client'
+
+// --- Server-side client (confidential / backend half) ---
+// Do NOT import into a browser bundle: holds the M2M client secret + mints JWTs.
+export { ScribeServerClient } from './server-client'
+export type { ScribeServerClientConfig, BrowserConnection } from './server-client'
 
 // --- Transcript core ---
 export { normalizeTurn } from './normalize'
