@@ -43,6 +43,11 @@ no Node-only imports) but the REST client runs anywhere `fetch` exists.
 > the session ends, read the transcript and the generated artifacts (note,
 > summary, checklist, codes) via the REST client covered here.
 
+> **Integrating as an external customer?** See the end-to-end
+> [customer integration guide](docs/customer-integration.md) — the split-trust
+> model (backend M2M + browser attach ticket), copy-pasteable backend and
+> browser examples, security guidance, hosts, and troubleshooting.
+
 ## Install
 
 ```bash
