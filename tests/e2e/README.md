@@ -1,17 +1,19 @@
 # E2E tests
 
-Two suites exercise the SDK against a **real** Scribe stack:
+Two suites exercise the SDK against a **real** Scribe stack, driven through the
+shipped clients (`ScribeServerClient` = backend, `ScribeStreamClient` = browser):
 
 1. **`scribe-crud.e2e.test.ts`** — CRUD client (create-session → allocate →
    get-transcript). Uses a static provider JWT (`SCRIBE_E2E_TOKEN`) if set,
-   otherwise mints one via the provider-M2M grant (same secrets as suite 2), so
-   it **runs in CI** too.
-2. **`scribe-streaming.e2e.test.ts`** — the full **superscribe-web in-person
-   path** through the SDK: mint a per-clinician provider token via the
-   provider-M2M `client_credentials` + `provider_email` (act-as-by-email) grant →
-   `createSession` → `allocate` → mint a `token_exchange` attach ticket → open
-   the WebSocket, stream **synthetic PCM16** (headless CI has no mic), observe
-   acks/pong, then `end()`.
+   otherwise `ScribeServerClient` mints a per-clinician token via the provider-M2M
+   grant (same secrets as suite 2) and hands back a bound `ScribeClient`, so it
+   **runs in CI** too.
+2. **`scribe-streaming.e2e.test.ts`** — the full in-person path through the SDK:
+   `ScribeServerClient.mintProviderToken` (act-as-by-email) →
+   `server.createSession` → `server.prepareConnection` (allocate + `token_exchange`
+   attach ticket) wired into the browser client's `connectionProvider` seam →
+   `ScribeStreamClient.connect()`, stream **synthetic PCM16** (headless CI has no
+   mic), observe acks/pong, then `end()`.
 
 Both **run in CI** on pushes to `main` and same-repo PRs (see
 `.github/workflows/ci.yml` `e2e` job).
@@ -59,9 +61,10 @@ absent.
   available); the CRUD suite tolerates that too.
 - The streaming suite feeds a generated PCM16 tone; transcript frames from a
   pure tone are best-effort — the hard assertions are attach + acks + pong.
-- A `400 invalid_target` on the M2M mint means the `SCRIBE_E2E_PROVIDER_EMAIL`
-  has no **active (non-MFA) grant** in the workspace — a fixture problem, not a
-  code bug; the suite fails loudly with that guidance.
+- A `400 invalid_target` on the M2M mint (`BadRequestError` with
+  `errorCode === 'invalid_target'`) means the `SCRIBE_E2E_PROVIDER_EMAIL` has no
+  **active grant** in the workspace — a fixture problem, not a code bug; the
+  streaming suite fails loudly with that guidance.
 
 ## CI
 

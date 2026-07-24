@@ -18,8 +18,7 @@
  */
 import 'dotenv/config'
 import { beforeAll, describe, expect, it } from 'vitest'
-import { NotFoundError, ScribeClient, ServiceUnavailableError } from '../../src'
-import { mintM2mProviderToken } from './scribe-auth'
+import { NotFoundError, ScribeClient, ScribeServerClient, ServiceUnavailableError } from '../../src'
 
 const baseUrl = process.env.SCRIBE_E2E_BASE_URL
 const workspaceId = process.env.SCRIBE_E2E_WORKSPACE_ID
@@ -48,15 +47,24 @@ describe.runIf(hasCreds)('Scribe CRUD e2e (create → allocate → get-transcrip
   let client: ScribeClient
 
   beforeAll(async () => {
-    const token =
-      staticToken ??
-      (await mintM2mProviderToken({
+    if (staticToken) {
+      client = new ScribeClient({
+        baseUrl: baseUrl!,
+        token: staticToken,
+        workspaceId: workspaceId!,
+      })
+    } else {
+      // M2M path: ScribeServerClient mints the per-clinician provider token
+      // (act-as-by-email, cached) and hands back a bound ScribeClient.
+      const server = new ScribeServerClient({
         identityBaseUrl: identityBaseUrl!,
+        scribeBaseUrl: baseUrl!,
+        workspaceId: workspaceId!,
         clientId: clientId!,
         clientSecret: clientSecret!,
-        providerEmail: providerEmail!,
-      }))
-    client = new ScribeClient({ baseUrl: baseUrl!, token, workspaceId: workspaceId! })
+      })
+      client = server.scribe(providerEmail!)
+    }
   }, 30_000)
 
   it('creates a session, allocates it, then reads its (pending) transcript', async () => {

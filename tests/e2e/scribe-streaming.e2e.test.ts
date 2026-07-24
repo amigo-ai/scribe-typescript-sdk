@@ -2,14 +2,17 @@
  * End-to-end STREAMING test against the REAL staging Scribe stack — the full
  * superscribe-web in-person recording path, driven through the SDK:
  *
- *   1. Mint a per-clinician provider token via the provider-M2M
- *      `client_credentials` + `provider_email` (act-as-by-email) grant.
- *   2. `createSession` → `allocate` (CRUD REST client) as that clinician.
- *   3. Mint a `token_exchange` attach ticket (aud=scribe-streaming,
- *      scribe:streams:connect) bound to the session — wired as `ticketProvider`;
- *      `allocateProvider` re-runs allocate.
+ *   1. `ScribeServerClient` mints a per-clinician provider token via the
+ *      provider-M2M `client_credentials` + `provider_email` (act-as-by-email) grant.
+ *   2. `server.createSession(email, ...)` as that clinician.
+ *   3. `server.prepareConnection(email, sessionId)` (allocate + `token_exchange`
+ *      attach ticket) — wired straight into the browser client's unified
+ *      `connectionProvider` seam.
  *   4. `ScribeStreamClient.connect()` → `sendAudio(synthetic PCM16)` → observe
  *      acks / pong / transcripts → `end()`.
+ *
+ * This is the split-trust flow driven end-to-end through the SHIPPED SDK clients
+ * (`ScribeServerClient` = backend, `ScribeStreamClient` = browser).
  *
  * Headless CI has no mic, so the "in-person stream with audio" is exercised with
  * SYNTHETIC PCM16 (a generated tone) fed to `sendAudio` — exactly what the
@@ -29,13 +32,13 @@
 import 'dotenv/config'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import {
-  ScribeClient,
+  BadRequestError,
+  ScribeServerClient,
   ScribeStreamClient,
   ServiceUnavailableError,
   WS_CONNECT_PATH,
 } from '../../src'
 import type { ScribeStreamState, SttTranscriptSegment } from '../../src'
-import { mintAttachTicket, mintM2mProviderToken, ProviderGrantError } from './scribe-auth'
 
 const scribeBaseUrl = process.env.SCRIBE_E2E_BASE_URL
 const identityBaseUrl = process.env.SCRIBE_E2E_IDENTITY_BASE_URL
@@ -133,32 +136,35 @@ async function waitForState(
 }
 
 describe.runIf(hasCreds)('Scribe streaming e2e (M2M → create → allocate → stream → end)', () => {
-  let providerToken: string
+  let server: ScribeServerClient
 
   beforeAll(async () => {
     if (!hasWebSocket) {
       return
     }
-    // 1. Per-clinician provider token via act-as-by-email. A missing grant is a
-    // fixture problem, not a code bug — surface it loudly.
+    server = new ScribeServerClient({
+      identityBaseUrl: identityBaseUrl!,
+      scribeBaseUrl: scribeBaseUrl!,
+      workspaceId: workspaceId!,
+      clientId: clientId!,
+      clientSecret: clientSecret!,
+    })
+    // 1. Prove the per-clinician act-as-by-email grant up front. A missing grant
+    // is a fixture problem, not a code bug — surface it loudly. The token is
+    // cached, so create/prepareConnection below reuse this mint.
     try {
-      providerToken = await mintM2mProviderToken({
-        identityBaseUrl: identityBaseUrl!,
-        clientId: clientId!,
-        clientSecret: clientSecret!,
-        providerEmail: providerEmail!,
-      })
+      const providerToken = await server.mintProviderToken(providerEmail!)
+      expect(providerToken.length).toBeGreaterThan(0)
     } catch (err) {
-      if (err instanceof ProviderGrantError) {
+      if (err instanceof BadRequestError && err.errorCode === 'invalid_target') {
         throw new Error(
-          `[scribe streaming e2e] ${err.message} — the test provider email needs an ` +
-            `ACTIVE (non-MFA) provider_access_grant in workspace ${workspaceId}. ` +
-            `Create a fixture grant, then re-run.`
+          `[scribe streaming e2e] provider "${providerEmail}" is not eligible for act-as ` +
+            `delegation (no active / unknown / cross-workspace grant) — it needs an ACTIVE ` +
+            `provider_access_grant in workspace ${workspaceId}. Create a fixture grant, then re-run.`
         )
       }
       throw err
     }
-    expect(providerToken.length).toBeGreaterThan(0)
   }, 30_000)
 
   it('runs the full in-person path with synthetic PCM16', async () => {
@@ -168,39 +174,29 @@ describe.runIf(hasCreds)('Scribe streaming e2e (M2M → create → allocate → 
       return
     }
 
-    // 2. Create + allocate as the clinician (provider token is the bearer).
-    const scribe = new ScribeClient({
-      baseUrl: scribeBaseUrl!,
-      token: providerToken,
-      workspaceId: workspaceId!,
-    })
-    const session = await scribe.createSession({
+    // 2. Create the session as the clinician (server client mints + creates).
+    const session = await server.createSession(providerEmail!, {
       external_id: `sdk-stream-e2e-${Date.now()}`,
       metadata: { source: 'scribe-typescript-sdk streaming e2e' },
     })
     expect(session.id).toBeTruthy()
 
-    // 3 + 4. Stream via the SDK, wiring the two seams to the real mints.
-    // NOTE: `allocate` has a per-session cooldown (phase 12), so the seam is the
-    // SINGLE allocate call — do NOT pre-allocate separately or the second call
-    // 503s ("Too many allocation requests for this session"). We capture the
-    // host the seam resolved to for a post-connect assertion.
+    // 3 + 4. Stream via the SDK, wiring the browser client's unified
+    // `connectionProvider` seam straight to `server.prepareConnection` (one
+    // allocate + one ticket mint per (re)connect). NOTE: `allocate` has a
+    // per-session cooldown (phase 12), so prepareConnection is the SINGLE
+    // allocate call — do NOT pre-allocate separately or the second call 503s. We
+    // capture the host the seam resolved to for a post-connect assertion.
     const turns: SttTranscriptSegment[] = []
     const states: ScribeStreamState[] = []
     const errors: Error[] = []
     let allocatedHost = ''
     const client = new ScribeStreamClient({
       sessionId: session.id,
-      ticketProvider: async sid =>
-        mintAttachTicket({
-          identityBaseUrl: identityBaseUrl!,
-          subjectToken: providerToken,
-          sessionId: sid,
-        }),
-      allocateProvider: async sid => {
-        const a = await scribe.allocate(sid)
-        allocatedHost = a.host
-        return { host: a.host, expiresAt: a.expires_at }
+      connectionProvider: async sid => {
+        const conn = await server.prepareConnection(providerEmail!, sid)
+        allocatedHost = conn.host
+        return { host: conn.host, ticket: conn.ticket }
       },
       onTurn: seg => turns.push(seg),
       onStateChange: s => states.push(s),
