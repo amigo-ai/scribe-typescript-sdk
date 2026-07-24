@@ -21,6 +21,11 @@ name: Release
 on:
   push:
     branches: [main]
+    paths:
+      - 'src/**'
+  pull_request:
+    branches: [main]
+    types: [closed]
   workflow_dispatch:
     inputs:
       expected_version:
@@ -39,7 +44,11 @@ concurrency:
 jobs:
   release-please:
     name: Prepare or create release
-    if: github.event_name == 'push'
+    if: >-
+      github.event_name == 'push' ||
+      (github.event_name == 'pull_request' &&
+      github.event.pull_request.merged == true &&
+      contains(github.event.pull_request.labels.*.name, 'autorelease: pending'))
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -61,7 +70,9 @@ jobs:
     needs: release-please
     if: >-
       always() &&
-      (github.event_name != 'push' || needs.release-please.outputs.release_created == 'true')
+      (github.event_name == 'release' ||
+      github.event_name == 'workflow_dispatch' ||
+      needs.release-please.outputs.release_created == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -79,7 +90,7 @@ jobs:
           EXPECTED_VERSION: ${{ inputs.expected_version }}
           AUTOMATED_TAG: ${{ needs.release-please.outputs.tag_name }}
         run: |
-          if [ "$EVENT_NAME" = "push" ]; then
+          if [ "$EVENT_NAME" = "push" ] || [ "$EVENT_NAME" = "pull_request" ]; then
             TAG="$AUTOMATED_TAG"
           elif [ "$EVENT_NAME" = "release" ]; then
             TAG="$RELEASE_TAG"

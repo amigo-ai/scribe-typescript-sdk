@@ -244,13 +244,14 @@ The SDK follows [semver](https://semver.org). It is published to npm as
 Releases are automated by [Release Please](https://github.com/googleapis/release-please-action)
 and `.github/workflows/release.yml`:
 
-1. Merge package changes to `main` using
+1. Merge source-code changes under `src/` to `main` using
    [Conventional Commit](https://www.conventionalcommits.org/) titles. `fix:`
    produces a patch release, `feat:` a minor release, and a breaking-change
    marker (`feat!:` or a `BREAKING CHANGE:` footer) a major release.
 2. Release Please creates or updates a release PR containing the generated
-   changelog and `package.json` / `package-lock.json` version bump. Commits such
-   as `docs:`, `test:`, and `chore:` do not create a release on their own.
+   changelog and `package.json` / `package-lock.json` version bump. Changes
+   outside `src/` do not trigger the automated release flow, regardless of
+   commit type.
 3. Merge the release PR. Release Please creates the `vX.Y.Z` tag and GitHub
    Release, then the workflow re-validates the package
    (`build → typecheck → test → publint + attw + npm pack`) and runs
