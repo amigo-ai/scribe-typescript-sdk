@@ -29,8 +29,10 @@ It also ships the **recording-independent streaming WebSocket API client**
 short-lived **attach ticket**, streams **caller-supplied PCM16 bytes**, receives
 transcript frames, and handles control frames, app-level keepalive, and
 resumable reconnect. It has **no audio-capture code** (no `getUserMedia`,
-`AudioContext`, or mic): a caller feeds it PCM16 via `sendAudio`. The browser
-audio-capture recorder that drives the mic into this client is a later addition.
+`AudioContext`, or mic): a caller feeds it PCM16 via `sendAudio`.
+
+The **browser recording layer** (`ScribeRecorder` + the `AudioCapture` pipeline)
+drives the mic into that client — see [Browser recording](#browser-recording).
 Plus the pure transcript core: the wire contract (`CLIENT_FRAME`,
 `SERVER_MESSAGE`, `CLOSE_CODE`), `normalizeTurn`, the `transcriptReducer` (keyed
 on the server-owned ordinal), and `buildWsUrl`.
@@ -123,6 +125,44 @@ the client re-allocates + re-mints a ticket, reconnects the same session, sends
 `resume_from{acked_offset_bytes}`, and resends only the unacked ring-buffer
 audio. Pair `normalizeTurn` + `transcriptReducer` (or your own store) to render
 by the server-owned ordinal.
+
+### Browser recording
+
+`ScribeRecorder` is the browser-facing surface: it owns the Web Audio /
+`getUserMedia` PCM16 capture pipeline and drives a `ScribeStreamClient` for you.
+It adds **no** wire-protocol logic — reconnect, ring buffer, keepalive, and
+attach-ticket auth all live in `ScribeStreamClient`; the attach-ticket seams are
+passed straight through. `start()` connects + opens the mic and pipes each PCM16
+chunk to `sendAudio`; `pause`/`resume`/`end` drive both capture and the client.
+Browser-only (needs `getUserMedia`/`AudioContext`).
+
+```ts
+import { ScribeRecorder } from '@amigo-ai/scribe'
+
+const recorder = new ScribeRecorder({
+  sessionId: session.id,
+  ticketProvider: async sessionId => ({ ticket: await mintAttachTicket(sessionId) }),
+  allocateProvider: async sessionId => allocateHost(sessionId), // → { host, expiresAt }
+  audioCaptureMode: 'mic', // or 'mic+system' (adds tab/window audio via getDisplayMedia)
+  onTurn: segment => render(segment),
+  onStateChange: ({ state, streamState, micPermission, capturing }) => update(state),
+  onReconnect: () => console.log('resumed'),
+  onError: err => console.error(err),
+})
+
+await recorder.start() // connect + open mic; pipes PCM16 → client.sendAudio
+recorder.pause() // stops the mic; the WS stays open
+await recorder.resume() // re-opens the mic
+recorder.end() // stop the mic + finalize + clean close
+```
+
+On reconnect the mic keeps running — the client re-allocates, re-mints a ticket,
+and resends unacked audio while the recorder keeps feeding new chunks. The
+recorder state matrix is `idle → recording ⇄ paused → ended` (plus `failed`,
+e.g. the mic-permission-denied path, which also surfaces via `onError`).
+Lower-level building blocks are exported too: `floatToPcm16`, `STT_SAMPLE_RATE`,
+`AudioCapture`, and the `captureStreamsForMode` / `createPcmCapturePipeline` /
+`stopCapturedStreams` helpers.
 
 ### Configuration
 
