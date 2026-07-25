@@ -17,6 +17,9 @@ type Schemas = components['schemas']
 /** Lifecycle status of a scribe session. */
 export type SessionStatus = Schemas['SessionStatus']
 
+/** Modality of a scribe session: an in-person ("mic") recording or a Zoom meeting. */
+export type SessionMode = Schemas['SessionMode']
+
 /** Availability of a per-session artifact. */
 export type ArtifactAvailability = Schemas['ArtifactAvailability']
 
@@ -27,8 +30,14 @@ export type ArtifactAvailabilityResponse = Schemas['ArtifactAvailabilityResponse
  *
  * Reusing an `external_id` already owned by the same provider is idempotent; a
  * different provider in the same workspace gets a 409 ({@link ConflictError}).
+ *
+ * `mode` is narrowed to optional here: the generated schema marks it required
+ * because it carries a server-side default (`in_person`), but callers may omit
+ * it (the server applies the default). Pass `mode: 'zoom'` for a Zoom session.
  */
-export type CreateSessionRequest = Schemas['CreateSessionRequest']
+export type CreateSessionRequest = Omit<Schemas['CreateSessionRequest'], 'mode'> & {
+  mode?: SessionMode
+}
 
 /**
  * Response from create-session (`SessionResponse`).
@@ -88,6 +97,62 @@ export type ListSessionsParams = Omit<
  * {@link ScribeClient.listSessions} without a cast.
  */
 export type SessionListResponse = Omit<Schemas['SessionListResponse'], 'continuation_token'> & {
+  continuation_token?: string | number | null
+}
+
+/**
+ * Request body for {@link ScribeClient.updateSession} (`UpdateSessionRequest`).
+ *
+ * All fields optional; only fields present in the body are updated (the server
+ * uses `exclude_unset`). `external_appointment_id` is explicitly nullable —
+ * sending `null` clears the appointment link, while omitting it leaves the link
+ * as-is.
+ */
+export type UpdateSessionRequest = Schemas['UpdateSessionRequest']
+
+/**
+ * The scribe session linked to an appointment (`AppointmentSession`) — the
+ * most-recent non-cancelled match on `external_appointment_id`.
+ *
+ * A focused subset of {@link SessionResponse} (id + status + lifecycle
+ * timestamps, minus the artifact-availability sub-object) so a client can render
+ * the appointment's visit state without a second lookup. `null` when the
+ * appointment has no linked session yet.
+ */
+export type AppointmentSession = Schemas['AppointmentSession']
+
+/**
+ * A single appointment (`AppointmentResponse`), carrying its nested
+ * {@link AppointmentSession} (or `null` when unlinked).
+ */
+export type AppointmentResponse = Schemas['AppointmentResponse']
+
+/**
+ * Query params for {@link ScribeClient.listAppointments} — `limit` (page size)
+ * and `continuation_token` (opaque cursor from a prior page's response). Both
+ * optional. Mirrors {@link ListSessionsParams}: the generated
+ * `continuation_token` is `unknown` (the spec gives it no type), so it is
+ * narrowed to `string | number | null` here, letting a prior page's token thread
+ * straight back in without a cast.
+ */
+export type ListAppointmentsParams = Omit<
+  NonNullable<operations['list-appointments']['parameters']['query']>,
+  'continuation_token'
+> & { continuation_token?: string | number | null }
+
+/**
+ * Response from list-appointments (`AppointmentListResponse`).
+ *
+ * `items` is a page of {@link AppointmentResponse}; `has_more` signals whether
+ * another page exists; `continuation_token` is the cursor to pass back as
+ * {@link ListAppointmentsParams.continuation_token} for the next page, or `null`
+ * when there is no next page. Mirrors {@link SessionListResponse}: the generated
+ * `continuation_token` is `unknown` and narrowed here to `string | number | null`.
+ */
+export type AppointmentListResponse = Omit<
+  Schemas['AppointmentListResponse'],
+  'continuation_token'
+> & {
   continuation_token?: string | number | null
 }
 

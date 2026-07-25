@@ -11,7 +11,15 @@ Session lifecycle:
 - `allocate` — `POST /v1/{workspace_id}/sessions/{session_id}/allocate` → `{ host, expires_at }`
 - `listSessions` — `GET /v1/{workspace_id}/sessions` (cursor-paginated: `limit`, `continuation_token`)
 - `getSession` — `GET /v1/{workspace_id}/sessions/{session_id}`
+- `updateSession` — `PATCH /v1/{workspace_id}/sessions/{session_id}` (mutate `external_appointment_id` / `metadata` / `mode`)
+- `endSession` — `POST /v1/{workspace_id}/sessions/{session_id}/end` (guarded → `in-review`)
+- `cancelSession` — `POST /v1/{workspace_id}/sessions/{session_id}/cancel` (guarded → `cancelled`)
 - `getTranscript` — `GET /v1/{workspace_id}/sessions/{session_id}/transcript`
+
+Appointments (read-only; each carries a nested `session` object):
+
+- `listAppointments` — `GET /v1/{workspace_id}/appointments` (cursor-paginated: `limit`, `continuation_token`)
+- `getAppointment` — `GET /v1/{workspace_id}/appointments/{appointment_id}`
 
 Artifacts (note / summary / checklist / codes):
 
