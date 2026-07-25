@@ -198,6 +198,12 @@ export class ScribeClient {
     if (!sessionId) {
       throw new ConfigurationError('sessionId is required', 'sessionId')
     }
+    // The request body is required (`UpdateSessionRequest`); an undefined `patch`
+    // would omit the body entirely and `null` would serialize to the invalid
+    // JSON literal `null`. Pass `{}` for a no-op patch (all fields optional).
+    if (patch == null) {
+      throw new ConfigurationError('patch is required', 'patch')
+    }
     return this.http.request<SessionResponse>({
       method: 'PATCH',
       path: `/v1/${workspaceId}/sessions/${encodeURIComponent(sessionId)}`,

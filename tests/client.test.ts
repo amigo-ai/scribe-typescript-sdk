@@ -519,6 +519,16 @@ describe('updateSession', () => {
       ConfigurationError
     )
   })
+
+  it('requires a patch body (rejects null/undefined without issuing a request)', async () => {
+    const { fetch, calls } = mockFetch([{ status: 200, body: { id: 'x' } }])
+    const c = client(fetch)
+    // @ts-expect-error patch is required
+    await expect(c.updateSession('sess-1', undefined)).rejects.toBeInstanceOf(ConfigurationError)
+    // @ts-expect-error patch cannot be null
+    await expect(c.updateSession('sess-1', null)).rejects.toBeInstanceOf(ConfigurationError)
+    expect(calls).toHaveLength(0)
+  })
 })
 
 describe('endSession', () => {
