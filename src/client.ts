@@ -2,6 +2,8 @@ import { ConfigurationError } from './errors'
 import { HttpClient, type ScribeClientConfig as HttpConfig } from './http'
 import type {
   AllocateResponse,
+  AppointmentListResponse,
+  AppointmentResponse,
   ChecklistResponse,
   CodesResponse,
   CreateSessionRequest,
@@ -11,12 +13,14 @@ import type {
   GeneratedNoteResponse,
   GeneratedSummaryResponse,
   GenerateNoteRequest,
+  ListAppointmentsParams,
   ListSessionsParams,
   NoteResponse,
   SessionListResponse,
   SessionResponse,
   SummaryResponse,
   TranscriptResponse,
+  UpdateSessionRequest,
 } from './types'
 
 export interface ScribeClientConfig extends HttpConfig {
@@ -172,6 +176,81 @@ export class ScribeClient {
     return this.http.request<SessionResponse>({
       method: 'GET',
       path: `/v1/${workspaceId}/sessions/${encodeURIComponent(sessionId)}`,
+      signal: options?.signal,
+    })
+  }
+
+  /**
+   * Update mutable fields of a session.
+   *
+   * `PATCH /v1/{workspace_id}/sessions/{session_id}` → 200. Requires
+   * `scribe:sessions:write` (owner-scoped). Only fields present in `patch` are
+   * updated: `external_appointment_id` (nullable — pass `null` to clear the
+   * appointment link), `metadata`, and `mode`. 404 if the session does not exist
+   * or is not owned by the caller.
+   */
+  async updateSession(
+    sessionId: string,
+    patch: UpdateSessionRequest,
+    options?: CallOptions
+  ): Promise<SessionResponse> {
+    const workspaceId = this.resolveWorkspaceId(options)
+    if (!sessionId) {
+      throw new ConfigurationError('sessionId is required', 'sessionId')
+    }
+    // The request body is required (`UpdateSessionRequest`); an undefined `patch`
+    // would omit the body entirely and `null` would serialize to the invalid
+    // JSON literal `null`. Pass `{}` for a no-op patch (all fields optional).
+    if (patch == null) {
+      throw new ConfigurationError('patch is required', 'patch')
+    }
+    return this.http.request<SessionResponse>({
+      method: 'PATCH',
+      path: `/v1/${workspaceId}/sessions/${encodeURIComponent(sessionId)}`,
+      body: patch,
+      signal: options?.signal,
+    })
+  }
+
+  /**
+   * End a session (guarded transition to `in-review`).
+   *
+   * `POST /v1/{workspace_id}/sessions/{session_id}/end` → 200. Requires
+   * `scribe:sessions:write` (owner-scoped). Takes no request body. Returns the
+   * updated session. While a live streaming attach exists the server rejects the
+   * REST end with `409` ({@link ConflictError}, `session_streaming`) — send the
+   * WS `end` control frame instead; the REST end never touches transcript
+   * artifacts. 404 if the session does not exist or is not owned by the caller.
+   */
+  async endSession(sessionId: string, options?: CallOptions): Promise<SessionResponse> {
+    const workspaceId = this.resolveWorkspaceId(options)
+    if (!sessionId) {
+      throw new ConfigurationError('sessionId is required', 'sessionId')
+    }
+    return this.http.request<SessionResponse>({
+      method: 'POST',
+      path: `/v1/${workspaceId}/sessions/${encodeURIComponent(sessionId)}/end`,
+      signal: options?.signal,
+    })
+  }
+
+  /**
+   * Cancel a session (guarded transition to `cancelled`).
+   *
+   * `POST /v1/{workspace_id}/sessions/{session_id}/cancel` → 200. Requires
+   * `scribe:sessions:write` (owner-scoped). Takes no request body. Returns the
+   * updated session. 409 ({@link ConflictError}) when the session is already in a
+   * terminal state that cannot transition to `cancelled`; 404 if it does not
+   * exist or is not owned by the caller.
+   */
+  async cancelSession(sessionId: string, options?: CallOptions): Promise<SessionResponse> {
+    const workspaceId = this.resolveWorkspaceId(options)
+    if (!sessionId) {
+      throw new ConfigurationError('sessionId is required', 'sessionId')
+    }
+    return this.http.request<SessionResponse>({
+      method: 'POST',
+      path: `/v1/${workspaceId}/sessions/${encodeURIComponent(sessionId)}/cancel`,
       signal: options?.signal,
     })
   }
@@ -335,6 +414,59 @@ export class ScribeClient {
     return this.http.request<CodesResponse>({
       method: 'GET',
       path: `/v1/${workspaceId}/sessions/${encodeURIComponent(sessionId)}/codes`,
+      signal: options?.signal,
+    })
+  }
+
+  /**
+   * List appointments in the workspace, cursor-paginated.
+   *
+   * `GET /v1/{workspace_id}/appointments` → 200. Requires
+   * `scribe:sessions:read_own`. Each appointment carries a nested
+   * {@link AppointmentSession} (the most-recent non-cancelled linked scribe
+   * session, or `null`). Pass `limit` to cap the page size and
+   * `continuation_token` (from a prior response) to fetch the next page;
+   * `has_more` signals whether one exists.
+   */
+  async listAppointments(
+    params: ListAppointmentsParams = {},
+    options?: CallOptions
+  ): Promise<AppointmentListResponse> {
+    const workspaceId = this.resolveWorkspaceId(options)
+    const query: Record<string, string | number | boolean | undefined> = {}
+    if (params.limit !== undefined) {
+      query.limit = params.limit
+    }
+    // Skip a null/absent cursor (the server returns `null` on the last page) so
+    // it is never serialized as the literal string "null"; a real cursor
+    // (string or number) is stringified by the query builder.
+    if (params.continuation_token != null) {
+      query.continuation_token = params.continuation_token
+    }
+    return this.http.request<AppointmentListResponse>({
+      method: 'GET',
+      path: `/v1/${workspaceId}/appointments`,
+      query,
+      signal: options?.signal,
+    })
+  }
+
+  /**
+   * Fetch a single appointment by id.
+   *
+   * `GET /v1/{workspace_id}/appointments/{appointment_id}` → 200. Requires
+   * `scribe:sessions:read_own`. The appointment carries its nested
+   * {@link AppointmentSession} (or `null` when unlinked). 404 if the appointment
+   * does not exist in the workspace.
+   */
+  async getAppointment(appointmentId: string, options?: CallOptions): Promise<AppointmentResponse> {
+    const workspaceId = this.resolveWorkspaceId(options)
+    if (!appointmentId) {
+      throw new ConfigurationError('appointmentId is required', 'appointmentId')
+    }
+    return this.http.request<AppointmentResponse>({
+      method: 'GET',
+      path: `/v1/${workspaceId}/appointments/${encodeURIComponent(appointmentId)}`,
       signal: options?.signal,
     })
   }

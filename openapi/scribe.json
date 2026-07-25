@@ -1,1434 +1,215 @@
 {
-  "openapi": "3.1.0",
-  "info": {
-    "title": "Scribe Service",
-    "description": "Clinical scribe service skeleton",
-    "version": "1.0.0"
-  },
-  "paths": {
-    "/health": {
-      "get": {
-        "summary": "Health",
-        "operationId": "health-check",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": {
-                    "type": "string"
-                  },
-                  "type": "object",
-                  "title": "Response Health-Check"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/readiness": {
-      "get": {
-        "summary": "Readiness",
-        "operationId": "readiness-check",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/{workspace_id}/sessions": {
-      "get": {
-        "tags": [
-          "Scribe sessions"
-        ],
-        "summary": "List Sessions",
-        "operationId": "list-sessions",
-        "parameters": [
-          {
-            "name": "workspace_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Workspace Id"
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "maximum": 200,
-              "minimum": 1,
-              "default": 50,
-              "title": "Limit"
-            }
-          },
-          {
-            "name": "continuation_token",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "title": "Continuation Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SessionListResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Bearer token is absent or invalid.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "The principal is outside this workspace or provider scope.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "No provider-owned resource exists at this URL.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Generation cannot proceed for the current session state.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Request validation failed.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Clinical generation is temporarily unavailable.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "Scribe sessions"
-        ],
-        "summary": "Create Session",
-        "operationId": "create-session",
-        "parameters": [
-          {
-            "name": "workspace_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Workspace Id"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreateSessionRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SessionResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Bearer token is absent or invalid.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "The principal is outside this workspace or provider scope.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "external_id is already in use by another provider in this workspace.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Request validation failed.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/{workspace_id}/sessions/{session_id}/allocate": {
-      "post": {
-        "tags": [
-          "Scribe sessions"
-        ],
-        "summary": "Allocate Session",
-        "description": "Allocate a scribe-streaming GameServer for an owned session and return `{host, expires_at}`.\n\nThe dispatcher leg of create -> allocate -> WS-attach (decision 3): the browser never allocates.\nThe allocation is intentionally NOT persisted as a session mutation — a reconnect re-allocates a\nfresh GameServer, and the WS attach re-verifies ownership.",
-        "operationId": "allocate-session",
-        "parameters": [
-          {
-            "name": "workspace_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Workspace Id"
-            }
-          },
-          {
-            "name": "session_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Session Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AllocateResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Bearer token is absent or invalid.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "The principal is outside this workspace or provider scope.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "No provider-owned resource exists at this URL.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "The session is not in an allocatable state.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "No streaming capacity is available; retry after the `Retry-After` interval.",
-            "headers": {
-              "Retry-After": {
-                "description": "Seconds to wait before retrying (retryable capacity signal).",
-                "schema": {
-                  "type": "integer"
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/{workspace_id}/sessions/{session_id}": {
-      "get": {
-        "tags": [
-          "Scribe sessions"
-        ],
-        "summary": "Get Session",
-        "operationId": "get-session",
-        "parameters": [
-          {
-            "name": "workspace_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Workspace Id"
-            }
-          },
-          {
-            "name": "session_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Session Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SessionResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Bearer token is absent or invalid.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "The principal is outside this workspace or provider scope.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "No provider-owned resource exists at this URL.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Generation cannot proceed for the current session state.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Request validation failed.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Clinical generation is temporarily unavailable.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/{workspace_id}/sessions/{session_id}/transcript": {
-      "get": {
-        "tags": [
-          "Scribe sessions"
-        ],
-        "summary": "Get Transcript",
-        "operationId": "get-session-transcript",
-        "parameters": [
-          {
-            "name": "workspace_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Workspace Id"
-            }
-          },
-          {
-            "name": "session_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Session Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TranscriptResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Bearer token is absent or invalid.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "The principal is outside this workspace or provider scope.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "No provider-owned resource exists at this URL.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Generation cannot proceed for the current session state.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Request validation failed.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Clinical generation is temporarily unavailable.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/{workspace_id}/sessions/{session_id}/note": {
-      "get": {
-        "tags": [
-          "Scribe sessions"
-        ],
-        "summary": "Get Note",
-        "operationId": "get-session-note",
-        "parameters": [
-          {
-            "name": "workspace_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Workspace Id"
-            }
-          },
-          {
-            "name": "session_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Session Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/NoteResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Bearer token is absent or invalid.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "The principal is outside this workspace or provider scope.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "No provider-owned resource exists at this URL.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Generation cannot proceed for the current session state.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Request validation failed.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Clinical generation is temporarily unavailable.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "Scribe sessions"
-        ],
-        "summary": "Generate Note",
-        "operationId": "generate-session-note",
-        "parameters": [
-          {
-            "name": "workspace_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Workspace Id"
-            }
-          },
-          {
-            "name": "session_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Session Id"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/GenerateNoteRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GeneratedNoteResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Bearer token is absent or invalid.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "The principal is outside this workspace or provider scope.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "No provider-owned resource exists at this URL.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Generation cannot proceed for the current session state.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Request validation failed.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Clinical generation is temporarily unavailable.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/{workspace_id}/sessions/{session_id}/summary": {
-      "get": {
-        "tags": [
-          "Scribe sessions"
-        ],
-        "summary": "Get Summary",
-        "operationId": "get-session-summary",
-        "parameters": [
-          {
-            "name": "workspace_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Workspace Id"
-            }
-          },
-          {
-            "name": "session_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Session Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SummaryResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Bearer token is absent or invalid.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "The principal is outside this workspace or provider scope.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "No provider-owned resource exists at this URL.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Generation cannot proceed for the current session state.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Request validation failed.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Clinical generation is temporarily unavailable.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "Scribe sessions"
-        ],
-        "summary": "Generate Summary",
-        "operationId": "generate-session-summary",
-        "parameters": [
-          {
-            "name": "workspace_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Workspace Id"
-            }
-          },
-          {
-            "name": "session_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Session Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GeneratedSummaryResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Bearer token is absent or invalid.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "The principal is outside this workspace or provider scope.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "No provider-owned resource exists at this URL.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Generation cannot proceed for the current session state.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Request validation failed.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Clinical generation is temporarily unavailable.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/{workspace_id}/sessions/{session_id}/checklist": {
-      "get": {
-        "tags": [
-          "Scribe sessions"
-        ],
-        "summary": "Get Checklist",
-        "operationId": "get-session-checklist",
-        "parameters": [
-          {
-            "name": "workspace_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Workspace Id"
-            }
-          },
-          {
-            "name": "session_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Session Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ChecklistResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Bearer token is absent or invalid.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "The principal is outside this workspace or provider scope.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "No provider-owned resource exists at this URL.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Generation cannot proceed for the current session state.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Request validation failed.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Clinical generation is temporarily unavailable.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "Scribe sessions"
-        ],
-        "summary": "Generate Checklist",
-        "operationId": "generate-session-checklist",
-        "parameters": [
-          {
-            "name": "workspace_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Workspace Id"
-            }
-          },
-          {
-            "name": "session_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Session Id"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/GenerateChecklistRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GeneratedChecklistResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Bearer token is absent or invalid.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "The principal is outside this workspace or provider scope.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "No provider-owned resource exists at this URL.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Generation cannot proceed for the current session state.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Request validation failed.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Clinical generation is temporarily unavailable.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/{workspace_id}/sessions/{session_id}/codes": {
-      "get": {
-        "tags": [
-          "Scribe sessions"
-        ],
-        "summary": "Get Codes",
-        "operationId": "get-session-codes",
-        "parameters": [
-          {
-            "name": "workspace_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Workspace Id"
-            }
-          },
-          {
-            "name": "session_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Session Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CodesResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Bearer token is absent or invalid.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "The principal is outside this workspace or provider scope.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "No provider-owned resource exists at this URL.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Generation cannot proceed for the current session state.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Request validation failed.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Clinical generation is temporarily unavailable.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/{workspace_id}/sessions/{session_id}/note/finalize": {
-      "post": {
-        "tags": [
-          "Scribe sessions"
-        ],
-        "summary": "Finalize Note",
-        "operationId": "finalize-session-note",
-        "parameters": [
-          {
-            "name": "workspace_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Workspace Id"
-            }
-          },
-          {
-            "name": "session_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Session Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/FinalizeNoteResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Bearer token is absent or invalid.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "The principal is outside this workspace or provider scope.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "No provider-owned resource exists at this URL.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Generation cannot proceed for the current session state.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Request validation failed.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Clinical generation is temporarily unavailable.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  },
   "components": {
     "schemas": {
       "AllocateResponse": {
         "properties": {
-          "host": {
-            "type": "string",
-            "maxLength": 253,
-            "title": "Host"
-          },
           "expires_at": {
-            "type": "string",
             "format": "date-time",
-            "title": "Expires At"
+            "title": "Expires At",
+            "type": "string"
+          },
+          "host": {
+            "maxLength": 253,
+            "title": "Host",
+            "type": "string"
           }
         },
-        "type": "object",
         "required": [
           "host",
           "expires_at"
         ],
-        "title": "AllocateResponse"
+        "title": "AllocateResponse",
+        "type": "object"
+      },
+      "AppointmentListResponse": {
+        "properties": {
+          "continuation_token": {
+            "title": "Continuation Token"
+          },
+          "has_more": {
+            "title": "Has More",
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AppointmentResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items",
+          "has_more"
+        ],
+        "title": "AppointmentListResponse",
+        "type": "object"
+      },
+      "AppointmentResponse": {
+        "properties": {
+          "appointment_type": {
+            "maxLength": 256,
+            "title": "Appointment Type",
+            "type": "string"
+          },
+          "duration_minutes": {
+            "minimum": 0,
+            "title": "Duration Minutes",
+            "type": "integer"
+          },
+          "end": {
+            "format": "date-time",
+            "title": "End",
+            "type": "string"
+          },
+          "id": {
+            "maxLength": 512,
+            "title": "Id",
+            "type": "string"
+          },
+          "location_name": {
+            "maxLength": 256,
+            "title": "Location Name",
+            "type": "string"
+          },
+          "patient_entity_id": {
+            "maxLength": 512,
+            "title": "Patient Entity Id",
+            "type": "string"
+          },
+          "patient_name": {
+            "maxLength": 256,
+            "title": "Patient Name",
+            "type": "string"
+          },
+          "practitioner_entity_id": {
+            "maxLength": 256,
+            "title": "Practitioner Entity Id",
+            "type": "string"
+          },
+          "practitioner_name": {
+            "maxLength": 256,
+            "title": "Practitioner Name",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 256,
+            "title": "Reason",
+            "type": "string"
+          },
+          "session": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AppointmentSession"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "start": {
+            "format": "date-time",
+            "title": "Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "start",
+          "end",
+          "duration_minutes",
+          "reason",
+          "appointment_type",
+          "patient_name",
+          "patient_entity_id",
+          "practitioner_name",
+          "practitioner_entity_id",
+          "location_name"
+        ],
+        "title": "AppointmentResponse",
+        "type": "object"
+      },
+      "AppointmentSession": {
+        "description": "The scribe session linked to an appointment (most-recent match on external_appointment_id).\n\nA focused summary — id + status + lifecycle timestamps — that lets a client render the\nappointment's visit state (e.g. \"in review\", \"completed\") directly from the appointments list,\nwith no second lookup. It is a strict subset of `SessionResponse` (same field names/types) minus\nthe artifact-availability sub-object: resolving artifact availability needs per-kind LATERAL\njoins, so it is deliberately left to `GET /sessions/{id}` and kept out of the appointment join,\nwhich stays a single cheap `DISTINCT ON` query over `scribe.sessions`.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "ended_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ended At"
+          },
+          "external_appointment_id": {
+            "anyOf": [
+              {
+                "maxLength": 512,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Appointment Id"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SessionStatus"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "started_at",
+          "ended_at",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "AppointmentSession",
+        "type": "object"
       },
       "ArtifactAvailability": {
-        "type": "string",
         "enum": [
           "pending",
           "available",
           "failed"
         ],
-        "title": "ArtifactAvailability"
+        "title": "ArtifactAvailability",
+        "type": "string"
       },
       "ArtifactAvailabilityResponse": {
         "properties": {
-          "transcript": {
+          "codes": {
             "$ref": "#/components/schemas/ArtifactAvailability"
           },
           "note": {
@@ -1437,123 +218,122 @@
           "summary": {
             "$ref": "#/components/schemas/ArtifactAvailability"
           },
-          "codes": {
+          "transcript": {
             "$ref": "#/components/schemas/ArtifactAvailability"
           }
         },
-        "type": "object",
         "required": [
           "transcript",
           "note",
           "summary",
           "codes"
         ],
-        "title": "ArtifactAvailabilityResponse"
+        "title": "ArtifactAvailabilityResponse",
+        "type": "object"
       },
       "ChecklistItemRequest": {
         "properties": {
           "id": {
-            "type": "string",
             "maxLength": 128,
             "minLength": 1,
             "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
-            "title": "Id"
+            "title": "Id",
+            "type": "string"
           },
           "label": {
-            "type": "string",
             "maxLength": 500,
             "minLength": 1,
-            "title": "Label"
+            "title": "Label",
+            "type": "string"
           }
         },
-        "type": "object",
         "required": [
           "id",
           "label"
         ],
-        "title": "ChecklistItemRequest"
+        "title": "ChecklistItemRequest",
+        "type": "object"
       },
       "ChecklistItemResponse": {
         "properties": {
-          "id": {
-            "type": "string",
-            "maxLength": 128,
-            "title": "Id"
-          },
-          "label": {
-            "type": "string",
-            "maxLength": 500,
-            "title": "Label"
-          },
-          "state": {
-            "type": "string",
-            "enum": [
-              "open",
-              "checked"
-            ],
-            "title": "State"
-          },
           "evidence": {
             "anyOf": [
               {
-                "type": "string",
-                "maxLength": 2000
+                "maxLength": 2000,
+                "type": "string"
               },
               {
                 "type": "null"
               }
             ],
             "title": "Evidence"
+          },
+          "id": {
+            "maxLength": 128,
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "maxLength": 500,
+            "title": "Label",
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "open",
+              "checked"
+            ],
+            "title": "State",
+            "type": "string"
           }
         },
-        "type": "object",
         "required": [
           "id",
           "label",
           "state"
         ],
-        "title": "ChecklistItemResponse"
+        "title": "ChecklistItemResponse",
+        "type": "object"
       },
       "ChecklistResponse": {
         "properties": {
-          "session_id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Session Id"
-          },
-          "title": {
-            "type": "string",
-            "maxLength": 256,
-            "title": "Title"
-          },
-          "status": {
-            "type": "string",
-            "enum": [
-              "open",
-              "completed",
-              "archived"
-            ],
-            "title": "Status"
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
           },
           "items": {
             "items": {
               "$ref": "#/components/schemas/ChecklistItemResponse"
             },
-            "type": "array",
-            "title": "Items"
+            "title": "Items",
+            "type": "array"
           },
-          "created_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Created At"
+          "session_id": {
+            "format": "uuid",
+            "title": "Session Id",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "open",
+              "completed",
+              "archived"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "title": {
+            "maxLength": 256,
+            "title": "Title",
+            "type": "string"
           },
           "updated_at": {
-            "type": "string",
             "format": "date-time",
-            "title": "Updated At"
+            "title": "Updated At",
+            "type": "string"
           }
         },
-        "type": "object",
         "required": [
           "session_id",
           "title",
@@ -1562,31 +342,22 @@
           "created_at",
           "updated_at"
         ],
-        "title": "ChecklistResponse"
+        "title": "ChecklistResponse",
+        "type": "object"
       },
       "CodeSuggestionResponse": {
         "properties": {
           "code": {
-            "type": "string",
             "maxLength": 64,
-            "title": "Code"
-          },
-          "description": {
-            "type": "string",
-            "maxLength": 2000,
-            "title": "Description"
-          },
-          "rationale": {
-            "type": "string",
-            "maxLength": 10000,
-            "title": "Rationale"
+            "title": "Code",
+            "type": "string"
           },
           "confidence": {
             "anyOf": [
               {
-                "type": "number",
                 "maximum": 1,
-                "minimum": 0
+                "minimum": 0,
+                "type": "number"
               },
               {
                 "type": "null"
@@ -1594,55 +365,65 @@
             ],
             "title": "Confidence"
           },
+          "description": {
+            "maxLength": 2000,
+            "title": "Description",
+            "type": "string"
+          },
+          "rationale": {
+            "maxLength": 10000,
+            "title": "Rationale",
+            "type": "string"
+          },
           "status": {
-            "type": "string",
             "enum": [
               "suggested",
               "accepted",
               "rejected",
               "voided"
             ],
-            "title": "Status"
+            "title": "Status",
+            "type": "string"
           }
         },
-        "type": "object",
         "required": [
           "code",
           "description",
           "rationale",
           "status"
         ],
-        "title": "CodeSuggestionResponse"
+        "title": "CodeSuggestionResponse",
+        "type": "object"
       },
       "CodesResponse": {
         "properties": {
-          "session_id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Session Id"
-          },
           "items": {
             "items": {
               "$ref": "#/components/schemas/CodeSuggestionResponse"
             },
-            "type": "array",
-            "title": "Items"
+            "title": "Items",
+            "type": "array"
+          },
+          "session_id": {
+            "format": "uuid",
+            "title": "Session Id",
+            "type": "string"
           }
         },
-        "type": "object",
         "required": [
           "session_id",
           "items"
         ],
-        "title": "CodesResponse"
+        "title": "CodesResponse",
+        "type": "object"
       },
       "CreateSessionRequest": {
         "properties": {
           "external_appointment_id": {
             "anyOf": [
               {
-                "type": "string",
-                "maxLength": 512
+                "maxLength": 512,
+                "type": "string"
               },
               {
                 "type": "null"
@@ -1653,8 +434,8 @@
           "external_id": {
             "anyOf": [
               {
-                "type": "string",
-                "maxLength": 512
+                "maxLength": 512,
+                "type": "string"
               },
               {
                 "type": "null"
@@ -1664,20 +445,24 @@
           },
           "metadata": {
             "additionalProperties": true,
-            "type": "object",
-            "title": "Metadata"
+            "title": "Metadata",
+            "type": "object"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/SessionMode",
+            "default": "in_person"
           }
         },
-        "type": "object",
-        "title": "CreateSessionRequest"
+        "title": "CreateSessionRequest",
+        "type": "object"
       },
       "ErrorDetail": {
         "properties": {
           "field": {
             "anyOf": [
               {
-                "type": "string",
-                "maxLength": 256
+                "maxLength": 256,
+                "type": "string"
               },
               {
                 "type": "null"
@@ -1686,49 +471,49 @@
             "title": "Field"
           },
           "message": {
-            "type": "string",
             "maxLength": 2000,
-            "title": "Message"
+            "title": "Message",
+            "type": "string"
           }
         },
-        "type": "object",
         "required": [
           "message"
         ],
-        "title": "ErrorDetail"
+        "title": "ErrorDetail",
+        "type": "object"
       },
       "ErrorResponse": {
         "properties": {
           "code": {
-            "type": "string",
             "maxLength": 64,
-            "title": "Code"
-          },
-          "message": {
-            "type": "string",
-            "maxLength": 2000,
-            "title": "Message"
+            "title": "Code",
+            "type": "string"
           },
           "correlation_id": {
-            "type": "string",
             "format": "uuid",
-            "title": "Correlation Id"
+            "title": "Correlation Id",
+            "type": "string"
           },
           "details": {
             "items": {
               "$ref": "#/components/schemas/ErrorDetail"
             },
-            "type": "array",
-            "title": "Details"
+            "title": "Details",
+            "type": "array"
+          },
+          "message": {
+            "maxLength": 2000,
+            "title": "Message",
+            "type": "string"
           }
         },
-        "type": "object",
         "required": [
           "code",
           "message",
           "correlation_id"
         ],
-        "title": "ErrorResponse"
+        "title": "ErrorResponse",
+        "type": "object"
       },
       "FinalizeNoteResponse": {
         "properties": {
@@ -1736,41 +521,53 @@
             "$ref": "#/components/schemas/NoteResponse"
           }
         },
-        "type": "object",
         "required": [
           "note"
         ],
-        "title": "FinalizeNoteResponse"
+        "title": "FinalizeNoteResponse",
+        "type": "object"
       },
       "GenerateChecklistRequest": {
         "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 256,
-            "minLength": 1,
-            "title": "Title",
-            "default": "Visit checklist"
-          },
           "items": {
             "items": {
               "$ref": "#/components/schemas/ChecklistItemRequest"
             },
-            "type": "array",
             "maxItems": 100,
             "minItems": 1,
-            "title": "Items"
+            "title": "Items",
+            "type": "array"
+          },
+          "title": {
+            "default": "Visit checklist",
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
           }
         },
-        "type": "object",
         "required": [
           "items"
         ],
-        "title": "GenerateChecklistRequest"
+        "title": "GenerateChecklistRequest",
+        "type": "object"
       },
       "GenerateNoteRequest": {
         "properties": {
+          "instructions": {
+            "anyOf": [
+              {
+                "maxLength": 1200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Instructions"
+          },
           "note_type": {
-            "type": "string",
+            "default": "medical",
             "enum": [
               "full",
               "medical",
@@ -1783,23 +580,11 @@
               "amd-therapy-progress"
             ],
             "title": "Note Type",
-            "default": "medical"
-          },
-          "instructions": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 1200
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Instructions"
+            "type": "string"
           }
         },
-        "type": "object",
-        "title": "GenerateNoteRequest"
+        "title": "GenerateNoteRequest",
+        "type": "object"
       },
       "GeneratedChecklistResponse": {
         "properties": {
@@ -1810,77 +595,76 @@
             "$ref": "#/components/schemas/GenerationMetadata"
           }
         },
-        "type": "object",
         "required": [
           "checklist",
           "generation"
         ],
-        "title": "GeneratedChecklistResponse"
+        "title": "GeneratedChecklistResponse",
+        "type": "object"
       },
       "GeneratedNoteResponse": {
         "properties": {
-          "note": {
-            "$ref": "#/components/schemas/NoteResponse"
-          },
           "generation": {
             "$ref": "#/components/schemas/GenerationMetadata"
+          },
+          "note": {
+            "$ref": "#/components/schemas/NoteResponse"
           }
         },
-        "type": "object",
         "required": [
           "note",
           "generation"
         ],
-        "title": "GeneratedNoteResponse"
+        "title": "GeneratedNoteResponse",
+        "type": "object"
       },
       "GeneratedSummaryResponse": {
         "properties": {
-          "summary": {
-            "$ref": "#/components/schemas/SummaryResponse"
-          },
           "generation": {
             "$ref": "#/components/schemas/GenerationMetadata"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/SummaryResponse"
           }
         },
-        "type": "object",
         "required": [
           "summary",
           "generation"
         ],
-        "title": "GeneratedSummaryResponse"
+        "title": "GeneratedSummaryResponse",
+        "type": "object"
       },
       "GenerationMetadata": {
         "properties": {
+          "generated_at": {
+            "format": "date-time",
+            "title": "Generated At",
+            "type": "string"
+          },
           "id": {
-            "type": "string",
             "format": "uuid",
-            "title": "Id"
+            "title": "Id",
+            "type": "string"
+          },
+          "model_name": {
+            "maxLength": 256,
+            "title": "Model Name",
+            "type": "string"
           },
           "model_provider": {
-            "type": "string",
             "enum": [
               "openai",
               "anthropic"
             ],
-            "title": "Model Provider"
-          },
-          "model_name": {
-            "type": "string",
-            "maxLength": 256,
-            "title": "Model Name"
+            "title": "Model Provider",
+            "type": "string"
           },
           "prompt_version": {
-            "type": "string",
             "maxLength": 64,
-            "title": "Prompt Version"
-          },
-          "generated_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Generated At"
+            "title": "Prompt Version",
+            "type": "string"
           }
         },
-        "type": "object",
         "required": [
           "id",
           "model_provider",
@@ -1888,7 +672,8 @@
           "prompt_version",
           "generated_at"
         ],
-        "title": "GenerationMetadata"
+        "title": "GenerationMetadata",
+        "type": "object"
       },
       "HTTPValidationError": {
         "properties": {
@@ -1896,49 +681,25 @@
             "items": {
               "$ref": "#/components/schemas/ValidationError"
             },
-            "type": "array",
-            "title": "Detail"
+            "title": "Detail",
+            "type": "array"
           }
         },
-        "type": "object",
-        "title": "HTTPValidationError"
+        "title": "HTTPValidationError",
+        "type": "object"
       },
       "NoteResponse": {
         "properties": {
-          "session_id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Session Id"
-          },
-          "type": {
-            "type": "string",
-            "maxLength": 64,
-            "title": "Type"
-          },
-          "status": {
-            "type": "string",
-            "enum": [
-              "draft",
-              "submitted",
-              "voided"
-            ],
-            "title": "Status"
-          },
           "body": {
-            "type": "string",
             "maxLength": 1000000,
-            "title": "Body"
-          },
-          "structured": {
-            "additionalProperties": true,
-            "type": "object",
-            "title": "Structured"
+            "title": "Body",
+            "type": "string"
           },
           "generated_at": {
             "anyOf": [
               {
-                "type": "string",
-                "format": "date-time"
+                "format": "date-time",
+                "type": "string"
               },
               {
                 "type": "null"
@@ -1946,11 +707,16 @@
             ],
             "title": "Generated At"
           },
+          "session_id": {
+            "format": "uuid",
+            "title": "Session Id",
+            "type": "string"
+          },
           "signed_at": {
             "anyOf": [
               {
-                "type": "string",
-                "format": "date-time"
+                "format": "date-time",
+                "type": "string"
               },
               {
                 "type": "null"
@@ -1958,13 +724,31 @@
             ],
             "title": "Signed At"
           },
+          "status": {
+            "enum": [
+              "draft",
+              "submitted",
+              "voided"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "structured": {
+            "additionalProperties": true,
+            "title": "Structured",
+            "type": "object"
+          },
+          "type": {
+            "maxLength": 64,
+            "title": "Type",
+            "type": "string"
+          },
           "updated_at": {
-            "type": "string",
             "format": "date-time",
-            "title": "Updated At"
+            "title": "Updated At",
+            "type": "string"
           }
         },
-        "type": "object",
         "required": [
           "session_id",
           "type",
@@ -1975,71 +759,57 @@
           "signed_at",
           "updated_at"
         ],
-        "title": "NoteResponse"
+        "title": "NoteResponse",
+        "type": "object"
       },
       "SessionListResponse": {
         "properties": {
+          "continuation_token": {
+            "title": "Continuation Token"
+          },
+          "has_more": {
+            "title": "Has More",
+            "type": "boolean"
+          },
           "items": {
             "items": {
               "$ref": "#/components/schemas/SessionResponse"
             },
-            "type": "array",
-            "title": "Items"
-          },
-          "has_more": {
-            "type": "boolean",
-            "title": "Has More"
-          },
-          "continuation_token": {
-            "title": "Continuation Token"
+            "title": "Items",
+            "type": "array"
           }
         },
-        "type": "object",
         "required": [
           "items",
           "has_more"
         ],
-        "title": "SessionListResponse"
+        "title": "SessionListResponse",
+        "type": "object"
+      },
+      "SessionMode": {
+        "description": "Modality of a scribe session: an in-person (\"mic\") recording or a Zoom meeting.",
+        "enum": [
+          "in_person",
+          "zoom"
+        ],
+        "title": "SessionMode",
+        "type": "string"
       },
       "SessionResponse": {
         "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Id"
+          "artifacts": {
+            "$ref": "#/components/schemas/ArtifactAvailabilityResponse"
           },
-          "status": {
-            "$ref": "#/components/schemas/SessionStatus"
-          },
-          "external_appointment_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 512
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "External Appointment Id"
-          },
-          "started_at": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Started At"
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
           },
           "ended_at": {
             "anyOf": [
               {
-                "type": "string",
-                "format": "date-time"
+                "format": "date-time",
+                "type": "string"
               },
               {
                 "type": "null"
@@ -2047,34 +817,61 @@
             ],
             "title": "Ended At"
           },
-          "created_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Created At"
+          "external_appointment_id": {
+            "anyOf": [
+              {
+                "maxLength": 512,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Appointment Id"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/SessionMode"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SessionStatus"
           },
           "updated_at": {
-            "type": "string",
             "format": "date-time",
-            "title": "Updated At"
-          },
-          "artifacts": {
-            "$ref": "#/components/schemas/ArtifactAvailabilityResponse"
+            "title": "Updated At",
+            "type": "string"
           }
         },
-        "type": "object",
         "required": [
           "id",
           "status",
+          "mode",
           "started_at",
           "ended_at",
           "created_at",
           "updated_at",
           "artifacts"
         ],
-        "title": "SessionResponse"
+        "title": "SessionResponse",
+        "type": "object"
       },
       "SessionStatus": {
-        "type": "string",
         "enum": [
           "created",
           "in-progress",
@@ -2083,70 +880,76 @@
           "cancelled",
           "failed"
         ],
-        "title": "SessionStatus"
+        "title": "SessionStatus",
+        "type": "string"
       },
       "SummaryResponse": {
         "properties": {
+          "generated_at": {
+            "format": "date-time",
+            "title": "Generated At",
+            "type": "string"
+          },
           "session_id": {
-            "type": "string",
             "format": "uuid",
-            "title": "Session Id"
+            "title": "Session Id",
+            "type": "string"
           },
           "summary": {
-            "type": "string",
             "maxLength": 10000,
-            "title": "Summary"
-          },
-          "generated_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Generated At"
+            "title": "Summary",
+            "type": "string"
           },
           "updated_at": {
-            "type": "string",
             "format": "date-time",
-            "title": "Updated At"
+            "title": "Updated At",
+            "type": "string"
           }
         },
-        "type": "object",
         "required": [
           "session_id",
           "summary",
           "generated_at",
           "updated_at"
         ],
-        "title": "SummaryResponse"
+        "title": "SummaryResponse",
+        "type": "object"
       },
       "TranscriptResponse": {
         "properties": {
-          "session_id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Session Id"
-          },
           "segments": {
             "items": {
               "$ref": "#/components/schemas/TranscriptSegment"
             },
-            "type": "array",
             "maxItems": 100000,
-            "title": "Segments"
+            "title": "Segments",
+            "type": "array"
+          },
+          "session_id": {
+            "format": "uuid",
+            "title": "Session Id",
+            "type": "string"
           }
         },
-        "type": "object",
         "required": [
           "session_id",
           "segments"
         ],
-        "title": "TranscriptResponse"
+        "title": "TranscriptResponse",
+        "type": "object"
       },
       "TranscriptSegment": {
         "properties": {
+          "end_ms": {
+            "minimum": 0,
+            "title": "End Ms",
+            "type": "integer"
+          },
           "speaker": {
             "anyOf": [
               {
-                "type": "string",
-                "maxLength": 256
+                "maxLength": 256,
+                "type": "string"
               },
               {
                 "type": "null"
@@ -2154,32 +957,75 @@
             ],
             "title": "Speaker"
           },
-          "text": {
-            "type": "string",
-            "maxLength": 100000,
-            "title": "Text"
-          },
           "start_ms": {
-            "type": "integer",
             "minimum": 0,
-            "title": "Start Ms"
+            "title": "Start Ms",
+            "type": "integer"
           },
-          "end_ms": {
-            "type": "integer",
-            "minimum": 0,
-            "title": "End Ms"
+          "text": {
+            "maxLength": 100000,
+            "title": "Text",
+            "type": "string"
           }
         },
-        "type": "object",
         "required": [
           "text",
           "start_ms",
           "end_ms"
         ],
-        "title": "TranscriptSegment"
+        "title": "TranscriptSegment",
+        "type": "object"
+      },
+      "UpdateSessionRequest": {
+        "description": "Mutable fields for `PATCH /sessions/{id}`. Only fields present in the body are updated.\n\n`external_appointment_id` is explicitly nullable — sending `null` clears the link — so the route\ndistinguishes \"field omitted\" (leave as-is) from \"field set to null\" via `exclude_unset`.",
+        "properties": {
+          "external_appointment_id": {
+            "anyOf": [
+              {
+                "maxLength": 512,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Appointment Id"
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metadata"
+          },
+          "mode": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SessionMode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "UpdateSessionRequest",
+        "type": "object"
       },
       "ValidationError": {
         "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
           "loc": {
             "items": {
               "anyOf": [
@@ -2191,32 +1037,1928 @@
                 }
               ]
             },
-            "type": "array",
-            "title": "Location"
+            "title": "Location",
+            "type": "array"
           },
           "msg": {
-            "type": "string",
-            "title": "Message"
+            "title": "Message",
+            "type": "string"
           },
           "type": {
-            "type": "string",
-            "title": "Error Type"
-          },
-          "input": {
-            "title": "Input"
-          },
-          "ctx": {
-            "type": "object",
-            "title": "Context"
+            "title": "Error Type",
+            "type": "string"
           }
         },
-        "type": "object",
         "required": [
           "loc",
           "msg",
           "type"
         ],
-        "title": "ValidationError"
+        "title": "ValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "description": "Clinical scribe service skeleton",
+    "title": "Scribe Service",
+    "version": "1.0.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/health": {
+      "get": {
+        "operationId": "health-check",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Health-Check",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Health"
+      }
+    },
+    "/readiness": {
+      "get": {
+        "operationId": "readiness-check",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Readiness"
+      }
+    },
+    "/v1/{workspace_id}/appointments": {
+      "get": {
+        "description": "List appointments for the current calendar day (workspace + provider read-scoped).\n\nPhase 38 ships a deliberate static stub sourced from the superscribe-web seed (see\n`src/appointments.py`); the response contract is stable so the source can later swap to a\ndownstream customer API via a managed External Integration without a wire change. Paginated to\nmirror the sibling `list-sessions` endpoint (offset-based `limit` + opaque `continuation_token`).",
+        "operationId": "list-appointments",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "continuation_token",
+            "required": false,
+            "schema": {
+              "title": "Continuation Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppointmentListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bearer token is absent or invalid."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The principal is outside this workspace or provider scope."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "No provider-owned resource exists at this URL."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Generation cannot proceed for the current session state."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Clinical generation is temporarily unavailable."
+          }
+        },
+        "summary": "List Appointments",
+        "tags": [
+          "Scribe sessions"
+        ]
+      }
+    },
+    "/v1/{workspace_id}/appointments/{appointment_id}": {
+      "get": {
+        "operationId": "get-appointment",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "appointment_id",
+            "required": true,
+            "schema": {
+              "maxLength": 512,
+              "title": "Appointment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppointmentResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bearer token is absent or invalid."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The principal is outside this workspace or provider scope."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "No provider-owned resource exists at this URL."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Generation cannot proceed for the current session state."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Clinical generation is temporarily unavailable."
+          }
+        },
+        "summary": "Get Appointment",
+        "tags": [
+          "Scribe sessions"
+        ]
+      }
+    },
+    "/v1/{workspace_id}/sessions": {
+      "get": {
+        "operationId": "list-sessions",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "continuation_token",
+            "required": false,
+            "schema": {
+              "title": "Continuation Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bearer token is absent or invalid."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The principal is outside this workspace or provider scope."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "No provider-owned resource exists at this URL."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Generation cannot proceed for the current session state."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Clinical generation is temporarily unavailable."
+          }
+        },
+        "summary": "List Sessions",
+        "tags": [
+          "Scribe sessions"
+        ]
+      },
+      "post": {
+        "operationId": "create-session",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSessionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bearer token is absent or invalid."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The principal is outside this workspace or provider scope."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "external_id is already in use by another provider (`conflict`), was reused with a different fingerprint (`idempotency_key_conflict`), or the practitioner already has an active Zoom session (`active_zoom_session_exists`)."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          }
+        },
+        "summary": "Create Session",
+        "tags": [
+          "Scribe sessions"
+        ]
+      }
+    },
+    "/v1/{workspace_id}/sessions/{session_id}": {
+      "get": {
+        "operationId": "get-session",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bearer token is absent or invalid."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The principal is outside this workspace or provider scope."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "No provider-owned resource exists at this URL."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Generation cannot proceed for the current session state."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Clinical generation is temporarily unavailable."
+          }
+        },
+        "summary": "Get Session",
+        "tags": [
+          "Scribe sessions"
+        ]
+      },
+      "patch": {
+        "description": "Patch an owned session's mutable fields (external_appointment_id / metadata / mode).\n\nIdempotent; only fields present in the body are written (sending `external_appointment_id: null`\nclears the link). A mode->zoom change is subject to the per-practitioner active-Zoom invariant\n(PLAT-10). Returns the full refreshed session so callers see accurate artifact availability.",
+        "operationId": "update-session",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSessionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bearer token is absent or invalid."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The principal is outside this workspace or provider scope."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "No provider-owned resource exists at this URL."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The practitioner already has an active Zoom session (`active_zoom_session_exists`)."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          }
+        },
+        "summary": "Update Session",
+        "tags": [
+          "Scribe sessions"
+        ]
+      }
+    },
+    "/v1/{workspace_id}/sessions/{session_id}/allocate": {
+      "post": {
+        "description": "Allocate a scribe-streaming GameServer for an owned session and return `{host, expires_at}`.\n\nThe dispatcher leg of create -> allocate -> WS-attach (decision 3): the browser never allocates.\nThe allocation is intentionally NOT persisted as a session mutation — a reconnect re-allocates a\nfresh GameServer, and the WS attach re-verifies ownership.",
+        "operationId": "allocate-session",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AllocateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bearer token is absent or invalid."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The principal is outside this workspace or provider scope."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "No provider-owned resource exists at this URL."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The session is not in an allocatable state."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "No streaming capacity is available; retry after the `Retry-After` interval.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before retrying (retryable capacity signal).",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Allocate Session",
+        "tags": [
+          "Scribe sessions"
+        ]
+      }
+    },
+    "/v1/{workspace_id}/sessions/{session_id}/cancel": {
+      "post": {
+        "description": "Cancel an owned non-terminal session (-> `cancelled`); the saga-compensation / abort path.\n\nGuarded so a terminal session no-ops with 409 `invalid_session_state`. Touches only status, never\ntranscript artifacts.",
+        "operationId": "cancel-session",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bearer token is absent or invalid."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The principal is outside this workspace or provider scope."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "No provider-owned resource exists at this URL."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The session is already terminal and cannot be cancelled (`invalid_session_state`)."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Cancel Session",
+        "tags": [
+          "Scribe sessions"
+        ]
+      }
+    },
+    "/v1/{workspace_id}/sessions/{session_id}/checklist": {
+      "get": {
+        "operationId": "get-session-checklist",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChecklistResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bearer token is absent or invalid."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The principal is outside this workspace or provider scope."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "No provider-owned resource exists at this URL."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Generation cannot proceed for the current session state."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Clinical generation is temporarily unavailable."
+          }
+        },
+        "summary": "Get Checklist",
+        "tags": [
+          "Scribe sessions"
+        ]
+      },
+      "post": {
+        "operationId": "generate-session-checklist",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerateChecklistRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GeneratedChecklistResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bearer token is absent or invalid."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The principal is outside this workspace or provider scope."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "No provider-owned resource exists at this URL."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Generation cannot proceed for the current session state."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Clinical generation is temporarily unavailable."
+          }
+        },
+        "summary": "Generate Checklist",
+        "tags": [
+          "Scribe sessions"
+        ]
+      }
+    },
+    "/v1/{workspace_id}/sessions/{session_id}/codes": {
+      "get": {
+        "operationId": "get-session-codes",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bearer token is absent or invalid."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The principal is outside this workspace or provider scope."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "No provider-owned resource exists at this URL."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Generation cannot proceed for the current session state."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Clinical generation is temporarily unavailable."
+          }
+        },
+        "summary": "Get Codes",
+        "tags": [
+          "Scribe sessions"
+        ]
+      }
+    },
+    "/v1/{workspace_id}/sessions/{session_id}/end": {
+      "post": {
+        "description": "End an owned session (`created`/`in-progress` -> `in-review`), guarded against a live stream.\n\nMic race guard (§3A.2): while a streaming worker is attached the WS worker is the sole finalizer,\nso REST end returns 409 `session_streaming` and never touches transcript artifacts. Permitted\nonly for an abandoned/never-streamed session; the guarded flip cannot race the worker or reaper.",
+        "operationId": "end-session",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bearer token is absent or invalid."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The principal is outside this workspace or provider scope."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "No provider-owned resource exists at this URL."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "A streaming worker is still attached (`session_streaming`) or the session is not in an endable state (`invalid_session_state`)."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "End Session",
+        "tags": [
+          "Scribe sessions"
+        ]
+      }
+    },
+    "/v1/{workspace_id}/sessions/{session_id}/note": {
+      "get": {
+        "operationId": "get-session-note",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NoteResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bearer token is absent or invalid."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The principal is outside this workspace or provider scope."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "No provider-owned resource exists at this URL."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Generation cannot proceed for the current session state."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Clinical generation is temporarily unavailable."
+          }
+        },
+        "summary": "Get Note",
+        "tags": [
+          "Scribe sessions"
+        ]
+      },
+      "post": {
+        "operationId": "generate-session-note",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerateNoteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GeneratedNoteResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bearer token is absent or invalid."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The principal is outside this workspace or provider scope."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "No provider-owned resource exists at this URL."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Generation cannot proceed for the current session state."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Clinical generation is temporarily unavailable."
+          }
+        },
+        "summary": "Generate Note",
+        "tags": [
+          "Scribe sessions"
+        ]
+      }
+    },
+    "/v1/{workspace_id}/sessions/{session_id}/note/finalize": {
+      "post": {
+        "operationId": "finalize-session-note",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FinalizeNoteResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bearer token is absent or invalid."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The principal is outside this workspace or provider scope."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "No provider-owned resource exists at this URL."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Generation cannot proceed for the current session state."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Clinical generation is temporarily unavailable."
+          }
+        },
+        "summary": "Finalize Note",
+        "tags": [
+          "Scribe sessions"
+        ]
+      }
+    },
+    "/v1/{workspace_id}/sessions/{session_id}/summary": {
+      "get": {
+        "operationId": "get-session-summary",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SummaryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bearer token is absent or invalid."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The principal is outside this workspace or provider scope."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "No provider-owned resource exists at this URL."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Generation cannot proceed for the current session state."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Clinical generation is temporarily unavailable."
+          }
+        },
+        "summary": "Get Summary",
+        "tags": [
+          "Scribe sessions"
+        ]
+      },
+      "post": {
+        "operationId": "generate-session-summary",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GeneratedSummaryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bearer token is absent or invalid."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The principal is outside this workspace or provider scope."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "No provider-owned resource exists at this URL."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Generation cannot proceed for the current session state."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Clinical generation is temporarily unavailable."
+          }
+        },
+        "summary": "Generate Summary",
+        "tags": [
+          "Scribe sessions"
+        ]
+      }
+    },
+    "/v1/{workspace_id}/sessions/{session_id}/transcript": {
+      "get": {
+        "operationId": "get-session-transcript",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TranscriptResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bearer token is absent or invalid."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The principal is outside this workspace or provider scope."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "No provider-owned resource exists at this URL."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Generation cannot proceed for the current session state."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Clinical generation is temporarily unavailable."
+          }
+        },
+        "summary": "Get Transcript",
+        "tags": [
+          "Scribe sessions"
+        ]
       }
     }
   }

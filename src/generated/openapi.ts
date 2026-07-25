@@ -38,6 +38,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/{workspace_id}/appointments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Appointments
+         * @description List appointments for the current calendar day (workspace + provider read-scoped).
+         *
+         *     Phase 38 ships a deliberate static stub sourced from the superscribe-web seed (see
+         *     `src/appointments.py`); the response contract is stable so the source can later swap to a
+         *     downstream customer API via a managed External Integration without a wire change. Paginated to
+         *     mirror the sibling `list-sessions` endpoint (offset-based `limit` + opaque `continuation_token`).
+         */
+        get: operations["list-appointments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/{workspace_id}/appointments/{appointment_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Appointment */
+        get: operations["get-appointment"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/{workspace_id}/sessions": {
         parameters: {
             query?: never;
@@ -54,6 +96,31 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/v1/{workspace_id}/sessions/{session_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Session */
+        get: operations["get-session"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Session
+         * @description Patch an owned session's mutable fields (external_appointment_id / metadata / mode).
+         *
+         *     Idempotent; only fields present in the body are written (sending `external_appointment_id: null`
+         *     clears the link). A mode->zoom change is subject to the per-practitioner active-Zoom invariant
+         *     (PLAT-10). Returns the full refreshed session so callers see accurate artifact availability.
+         */
+        patch: operations["update-session"];
         trace?: never;
     };
     "/v1/{workspace_id}/sessions/{session_id}/allocate": {
@@ -80,70 +147,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/{workspace_id}/sessions/{session_id}": {
+    "/v1/{workspace_id}/sessions/{session_id}/cancel": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Get Session */
-        get: operations["get-session"];
+        get?: never;
         put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/{workspace_id}/sessions/{session_id}/transcript": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Transcript */
-        get: operations["get-session-transcript"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/{workspace_id}/sessions/{session_id}/note": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Note */
-        get: operations["get-session-note"];
-        put?: never;
-        /** Generate Note */
-        post: operations["generate-session-note"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/{workspace_id}/sessions/{session_id}/summary": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Summary */
-        get: operations["get-session-summary"];
-        put?: never;
-        /** Generate Summary */
-        post: operations["generate-session-summary"];
+        /**
+         * Cancel Session
+         * @description Cancel an owned non-terminal session (-> `cancelled`); the saga-compensation / abort path.
+         *
+         *     Guarded so a terminal session no-ops with 409 `invalid_session_state`. Touches only status, never
+         *     transcript artifacts.
+         */
+        post: operations["cancel-session"];
         delete?: never;
         options?: never;
         head?: never;
@@ -185,6 +205,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/{workspace_id}/sessions/{session_id}/end": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * End Session
+         * @description End an owned session (`created`/`in-progress` -> `in-review`), guarded against a live stream.
+         *
+         *     Mic race guard (§3A.2): while a streaming worker is attached the WS worker is the sole finalizer,
+         *     so REST end returns 409 `session_streaming` and never touches transcript artifacts. Permitted
+         *     only for an abandoned/never-streamed session; the guarded flip cannot race the worker or reaper.
+         */
+        post: operations["end-session"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/{workspace_id}/sessions/{session_id}/note": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Note */
+        get: operations["get-session-note"];
+        put?: never;
+        /** Generate Note */
+        post: operations["generate-session-note"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/{workspace_id}/sessions/{session_id}/note/finalize": {
         parameters: {
             query?: never;
@@ -202,19 +264,130 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/{workspace_id}/sessions/{session_id}/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Summary */
+        get: operations["get-session-summary"];
+        put?: never;
+        /** Generate Summary */
+        post: operations["generate-session-summary"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/{workspace_id}/sessions/{session_id}/transcript": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Transcript */
+        get: operations["get-session-transcript"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         /** AllocateResponse */
         AllocateResponse: {
-            /** Host */
-            host: string;
             /**
              * Expires At
              * Format: date-time
              */
             expires_at: string;
+            /** Host */
+            host: string;
+        };
+        /** AppointmentListResponse */
+        AppointmentListResponse: {
+            /** Continuation Token */
+            continuation_token?: unknown;
+            /** Has More */
+            has_more: boolean;
+            /** Items */
+            items: components["schemas"]["AppointmentResponse"][];
+        };
+        /** AppointmentResponse */
+        AppointmentResponse: {
+            /** Appointment Type */
+            appointment_type: string;
+            /** Duration Minutes */
+            duration_minutes: number;
+            /**
+             * End
+             * Format: date-time
+             */
+            end: string;
+            /** Id */
+            id: string;
+            /** Location Name */
+            location_name: string;
+            /** Patient Entity Id */
+            patient_entity_id: string;
+            /** Patient Name */
+            patient_name: string;
+            /** Practitioner Entity Id */
+            practitioner_entity_id: string;
+            /** Practitioner Name */
+            practitioner_name: string;
+            /** Reason */
+            reason: string;
+            session?: components["schemas"]["AppointmentSession"] | null;
+            /**
+             * Start
+             * Format: date-time
+             */
+            start: string;
+        };
+        /**
+         * AppointmentSession
+         * @description The scribe session linked to an appointment (most-recent match on external_appointment_id).
+         *
+         *     A focused summary — id + status + lifecycle timestamps — that lets a client render the
+         *     appointment's visit state (e.g. "in review", "completed") directly from the appointments list,
+         *     with no second lookup. It is a strict subset of `SessionResponse` (same field names/types) minus
+         *     the artifact-availability sub-object: resolving artifact availability needs per-kind LATERAL
+         *     joins, so it is deliberately left to `GET /sessions/{id}` and kept out of the appointment join,
+         *     which stays a single cheap `DISTINCT ON` query over `scribe.sessions`.
+         */
+        AppointmentSession: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Ended At */
+            ended_at: string | null;
+            /** External Appointment Id */
+            external_appointment_id?: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Started At */
+            started_at: string | null;
+            status: components["schemas"]["SessionStatus"];
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
         };
         /**
          * ArtifactAvailability
@@ -223,10 +396,10 @@ export interface components {
         ArtifactAvailability: "pending" | "available" | "failed";
         /** ArtifactAvailabilityResponse */
         ArtifactAvailabilityResponse: {
-            transcript: components["schemas"]["ArtifactAvailability"];
+            codes: components["schemas"]["ArtifactAvailability"];
             note: components["schemas"]["ArtifactAvailability"];
             summary: components["schemas"]["ArtifactAvailability"];
-            codes: components["schemas"]["ArtifactAvailability"];
+            transcript: components["schemas"]["ArtifactAvailability"];
         };
         /** ChecklistItemRequest */
         ChecklistItemRequest: {
@@ -237,6 +410,8 @@ export interface components {
         };
         /** ChecklistItemResponse */
         ChecklistItemResponse: {
+            /** Evidence */
+            evidence?: string | null;
             /** Id */
             id: string;
             /** Label */
@@ -246,30 +421,28 @@ export interface components {
              * @enum {string}
              */
             state: "open" | "checked";
-            /** Evidence */
-            evidence?: string | null;
         };
         /** ChecklistResponse */
         ChecklistResponse: {
-            /**
-             * Session Id
-             * Format: uuid
-             */
-            session_id: string;
-            /** Title */
-            title: string;
-            /**
-             * Status
-             * @enum {string}
-             */
-            status: "open" | "completed" | "archived";
-            /** Items */
-            items: components["schemas"]["ChecklistItemResponse"][];
             /**
              * Created At
              * Format: date-time
              */
             created_at: string;
+            /** Items */
+            items: components["schemas"]["ChecklistItemResponse"][];
+            /**
+             * Session Id
+             * Format: uuid
+             */
+            session_id: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "open" | "completed" | "archived";
+            /** Title */
+            title: string;
             /**
              * Updated At
              * Format: date-time
@@ -280,12 +453,12 @@ export interface components {
         CodeSuggestionResponse: {
             /** Code */
             code: string;
+            /** Confidence */
+            confidence?: number | null;
             /** Description */
             description: string;
             /** Rationale */
             rationale: string;
-            /** Confidence */
-            confidence?: number | null;
             /**
              * Status
              * @enum {string}
@@ -294,13 +467,13 @@ export interface components {
         };
         /** CodesResponse */
         CodesResponse: {
+            /** Items */
+            items: components["schemas"]["CodeSuggestionResponse"][];
             /**
              * Session Id
              * Format: uuid
              */
             session_id: string;
-            /** Items */
-            items: components["schemas"]["CodeSuggestionResponse"][];
         };
         /** CreateSessionRequest */
         CreateSessionRequest: {
@@ -312,6 +485,8 @@ export interface components {
             metadata?: {
                 [key: string]: unknown;
             };
+            /** @default in_person */
+            mode: components["schemas"]["SessionMode"];
         };
         /** ErrorDetail */
         ErrorDetail: {
@@ -324,8 +499,6 @@ export interface components {
         ErrorResponse: {
             /** Code */
             code: string;
-            /** Message */
-            message: string;
             /**
              * Correlation Id
              * Format: uuid
@@ -333,6 +506,8 @@ export interface components {
             correlation_id: string;
             /** Details */
             details?: components["schemas"]["ErrorDetail"][];
+            /** Message */
+            message: string;
         };
         /** FinalizeNoteResponse */
         FinalizeNoteResponse: {
@@ -340,24 +515,24 @@ export interface components {
         };
         /** GenerateChecklistRequest */
         GenerateChecklistRequest: {
+            /** Items */
+            items: components["schemas"]["ChecklistItemRequest"][];
             /**
              * Title
              * @default Visit checklist
              */
             title: string;
-            /** Items */
-            items: components["schemas"]["ChecklistItemRequest"][];
         };
         /** GenerateNoteRequest */
         GenerateNoteRequest: {
+            /** Instructions */
+            instructions?: string | null;
             /**
              * Note Type
              * @default medical
              * @enum {string}
              */
             note_type: "full" | "medical" | "soap" | "dap" | "birp" | "amd-psych-intake" | "amd-psych-progress" | "amd-therapy-intake" | "amd-therapy-progress";
-            /** Instructions */
-            instructions?: string | null;
         };
         /** GeneratedChecklistResponse */
         GeneratedChecklistResponse: {
@@ -366,35 +541,35 @@ export interface components {
         };
         /** GeneratedNoteResponse */
         GeneratedNoteResponse: {
-            note: components["schemas"]["NoteResponse"];
             generation: components["schemas"]["GenerationMetadata"];
+            note: components["schemas"]["NoteResponse"];
         };
         /** GeneratedSummaryResponse */
         GeneratedSummaryResponse: {
-            summary: components["schemas"]["SummaryResponse"];
             generation: components["schemas"]["GenerationMetadata"];
+            summary: components["schemas"]["SummaryResponse"];
         };
         /** GenerationMetadata */
         GenerationMetadata: {
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /**
-             * Model Provider
-             * @enum {string}
-             */
-            model_provider: "openai" | "anthropic";
-            /** Model Name */
-            model_name: string;
-            /** Prompt Version */
-            prompt_version: string;
             /**
              * Generated At
              * Format: date-time
              */
             generated_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Model Name */
+            model_name: string;
+            /**
+             * Model Provider
+             * @enum {string}
+             */
+            model_provider: "openai" | "anthropic";
+            /** Prompt Version */
+            prompt_version: string;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -403,28 +578,28 @@ export interface components {
         };
         /** NoteResponse */
         NoteResponse: {
+            /** Body */
+            body: string;
+            /** Generated At */
+            generated_at: string | null;
             /**
              * Session Id
              * Format: uuid
              */
             session_id: string;
-            /** Type */
-            type: string;
+            /** Signed At */
+            signed_at: string | null;
             /**
              * Status
              * @enum {string}
              */
             status: "draft" | "submitted" | "voided";
-            /** Body */
-            body: string;
             /** Structured */
             structured: {
                 [key: string]: unknown;
             };
-            /** Generated At */
-            generated_at: string | null;
-            /** Signed At */
-            signed_at: string | null;
+            /** Type */
+            type: string;
             /**
              * Updated At
              * Format: date-time
@@ -433,38 +608,45 @@ export interface components {
         };
         /** SessionListResponse */
         SessionListResponse: {
-            /** Items */
-            items: components["schemas"]["SessionResponse"][];
-            /** Has More */
-            has_more: boolean;
             /** Continuation Token */
             continuation_token?: unknown;
+            /** Has More */
+            has_more: boolean;
+            /** Items */
+            items: components["schemas"]["SessionResponse"][];
         };
+        /**
+         * SessionMode
+         * @description Modality of a scribe session: an in-person ("mic") recording or a Zoom meeting.
+         * @enum {string}
+         */
+        SessionMode: "in_person" | "zoom";
         /** SessionResponse */
         SessionResponse: {
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            status: components["schemas"]["SessionStatus"];
-            /** External Appointment Id */
-            external_appointment_id?: string | null;
-            /** Started At */
-            started_at: string | null;
-            /** Ended At */
-            ended_at: string | null;
+            artifacts: components["schemas"]["ArtifactAvailabilityResponse"];
             /**
              * Created At
              * Format: date-time
              */
             created_at: string;
+            /** Ended At */
+            ended_at: string | null;
+            /** External Appointment Id */
+            external_appointment_id?: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            mode: components["schemas"]["SessionMode"];
+            /** Started At */
+            started_at: string | null;
+            status: components["schemas"]["SessionStatus"];
             /**
              * Updated At
              * Format: date-time
              */
             updated_at: string;
-            artifacts: components["schemas"]["ArtifactAvailabilityResponse"];
         };
         /**
          * SessionStatus
@@ -474,17 +656,17 @@ export interface components {
         /** SummaryResponse */
         SummaryResponse: {
             /**
+             * Generated At
+             * Format: date-time
+             */
+            generated_at: string;
+            /**
              * Session Id
              * Format: uuid
              */
             session_id: string;
             /** Summary */
             summary: string;
-            /**
-             * Generated At
-             * Format: date-time
-             */
-            generated_at: string;
             /**
              * Updated At
              * Format: date-time
@@ -493,37 +675,53 @@ export interface components {
         };
         /** TranscriptResponse */
         TranscriptResponse: {
+            /** Segments */
+            segments: components["schemas"]["TranscriptSegment"][];
             /**
              * Session Id
              * Format: uuid
              */
             session_id: string;
-            /** Segments */
-            segments: components["schemas"]["TranscriptSegment"][];
         };
         /** TranscriptSegment */
         TranscriptSegment: {
-            /** Speaker */
-            speaker?: string | null;
-            /** Text */
-            text: string;
-            /** Start Ms */
-            start_ms: number;
             /** End Ms */
             end_ms: number;
+            /** Speaker */
+            speaker?: string | null;
+            /** Start Ms */
+            start_ms: number;
+            /** Text */
+            text: string;
+        };
+        /**
+         * UpdateSessionRequest
+         * @description Mutable fields for `PATCH /sessions/{id}`. Only fields present in the body are updated.
+         *
+         *     `external_appointment_id` is explicitly nullable — sending `null` clears the link — so the route
+         *     distinguishes "field omitted" (leave as-is) from "field set to null" via `exclude_unset`.
+         */
+        UpdateSessionRequest: {
+            /** External Appointment Id */
+            external_appointment_id?: string | null;
+            /** Metadata */
+            metadata?: {
+                [key: string]: unknown;
+            } | null;
+            mode?: components["schemas"]["SessionMode"] | null;
         };
         /** ValidationError */
         ValidationError: {
+            /** Context */
+            ctx?: Record<string, never>;
+            /** Input */
+            input?: unknown;
             /** Location */
             loc: (string | number)[];
             /** Message */
             msg: string;
             /** Error Type */
             type: string;
-            /** Input */
-            input?: unknown;
-            /** Context */
-            ctx?: Record<string, never>;
         };
     };
     responses: never;
@@ -572,6 +770,162 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+        };
+    };
+    "list-appointments": {
+        parameters: {
+            query?: {
+                limit?: number;
+                continuation_token?: unknown;
+            };
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppointmentListResponse"];
+                };
+            };
+            /** @description Bearer token is absent or invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The principal is outside this workspace or provider scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No provider-owned resource exists at this URL. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Generation cannot proceed for the current session state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request validation failed. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Clinical generation is temporarily unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    "get-appointment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                appointment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppointmentResponse"];
+                };
+            };
+            /** @description Bearer token is absent or invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The principal is outside this workspace or provider scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No provider-owned resource exists at this URL. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Generation cannot proceed for the current session state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request validation failed. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Clinical generation is temporarily unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };
@@ -697,7 +1051,156 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description external_id is already in use by another provider in this workspace. */
+            /** @description external_id is already in use by another provider (`conflict`), was reused with a different fingerprint (`idempotency_key_conflict`), or the practitioner already has an active Zoom session (`active_zoom_session_exists`). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request validation failed. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    "get-session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionResponse"];
+                };
+            };
+            /** @description Bearer token is absent or invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The principal is outside this workspace or provider scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No provider-owned resource exists at this URL. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Generation cannot proceed for the current session state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request validation failed. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Clinical generation is temporarily unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    "update-session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSessionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionResponse"];
+                };
+            };
+            /** @description Bearer token is absent or invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The principal is outside this workspace or provider scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No provider-owned resource exists at this URL. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The practitioner already has an active Zoom session (`active_zoom_session_exists`). */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -796,7 +1299,7 @@ export interface operations {
             };
         };
     };
-    "get-session": {
+    "cancel-session": {
         parameters: {
             query?: never;
             header?: never;
@@ -844,7 +1347,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Generation cannot proceed for the current session state. */
+            /** @description The session is already terminal and cannot be cancelled (`invalid_session_state`). */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -853,411 +1356,13 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Request validation failed. */
+            /** @description Validation Error */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Clinical generation is temporarily unavailable. */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    "get-session-transcript": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                workspace_id: string;
-                session_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TranscriptResponse"];
-                };
-            };
-            /** @description Bearer token is absent or invalid. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description The principal is outside this workspace or provider scope. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description No provider-owned resource exists at this URL. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Generation cannot proceed for the current session state. */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Request validation failed. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Clinical generation is temporarily unavailable. */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    "get-session-note": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                workspace_id: string;
-                session_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["NoteResponse"];
-                };
-            };
-            /** @description Bearer token is absent or invalid. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description The principal is outside this workspace or provider scope. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description No provider-owned resource exists at this URL. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Generation cannot proceed for the current session state. */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Request validation failed. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Clinical generation is temporarily unavailable. */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    "generate-session-note": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                workspace_id: string;
-                session_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["GenerateNoteRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["GeneratedNoteResponse"];
-                };
-            };
-            /** @description Bearer token is absent or invalid. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description The principal is outside this workspace or provider scope. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description No provider-owned resource exists at this URL. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Generation cannot proceed for the current session state. */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Request validation failed. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Clinical generation is temporarily unavailable. */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    "get-session-summary": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                workspace_id: string;
-                session_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SummaryResponse"];
-                };
-            };
-            /** @description Bearer token is absent or invalid. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description The principal is outside this workspace or provider scope. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description No provider-owned resource exists at this URL. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Generation cannot proceed for the current session state. */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Request validation failed. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Clinical generation is temporarily unavailable. */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    "generate-session-summary": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                workspace_id: string;
-                session_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["GeneratedSummaryResponse"];
-                };
-            };
-            /** @description Bearer token is absent or invalid. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description The principal is outside this workspace or provider scope. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description No provider-owned resource exists at this URL. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Generation cannot proceed for the current session state. */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Request validation failed. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Clinical generation is temporarily unavailable. */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -1497,6 +1602,232 @@ export interface operations {
             };
         };
     };
+    "end-session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionResponse"];
+                };
+            };
+            /** @description Bearer token is absent or invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The principal is outside this workspace or provider scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No provider-owned resource exists at this URL. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A streaming worker is still attached (`session_streaming`) or the session is not in an endable state (`invalid_session_state`). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    "get-session-note": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoteResponse"];
+                };
+            };
+            /** @description Bearer token is absent or invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The principal is outside this workspace or provider scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No provider-owned resource exists at this URL. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Generation cannot proceed for the current session state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request validation failed. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Clinical generation is temporarily unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    "generate-session-note": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GenerateNoteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeneratedNoteResponse"];
+                };
+            };
+            /** @description Bearer token is absent or invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The principal is outside this workspace or provider scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No provider-owned resource exists at this URL. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Generation cannot proceed for the current session state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request validation failed. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Clinical generation is temporarily unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     "finalize-session-note": {
         parameters: {
             query?: never;
@@ -1516,6 +1847,237 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FinalizeNoteResponse"];
+                };
+            };
+            /** @description Bearer token is absent or invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The principal is outside this workspace or provider scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No provider-owned resource exists at this URL. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Generation cannot proceed for the current session state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request validation failed. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Clinical generation is temporarily unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    "get-session-summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SummaryResponse"];
+                };
+            };
+            /** @description Bearer token is absent or invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The principal is outside this workspace or provider scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No provider-owned resource exists at this URL. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Generation cannot proceed for the current session state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request validation failed. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Clinical generation is temporarily unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    "generate-session-summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeneratedSummaryResponse"];
+                };
+            };
+            /** @description Bearer token is absent or invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The principal is outside this workspace or provider scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No provider-owned resource exists at this URL. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Generation cannot proceed for the current session state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request validation failed. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Clinical generation is temporarily unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    "get-session-transcript": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TranscriptResponse"];
                 };
             };
             /** @description Bearer token is absent or invalid. */

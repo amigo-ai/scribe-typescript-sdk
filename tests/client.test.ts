@@ -469,6 +469,207 @@ describe('getCodes', () => {
   })
 })
 
+describe('updateSession', () => {
+  it('PATCHes /v1/{ws}/sessions/{id} with the JSON patch body and returns the session', async () => {
+    const session = {
+      id: 'sess-1',
+      status: 'created',
+      mode: 'zoom',
+      external_appointment_id: 'appt-9',
+    }
+    const { fetch, calls } = mockFetch([{ status: 200, body: session }])
+    const result = await client(fetch).updateSession('sess-1', {
+      external_appointment_id: 'appt-9',
+      mode: 'zoom',
+    })
+
+    expect(result).toEqual(session)
+    expect(calls[0]!.url).toBe(`${BASE}/v1/${WS}/sessions/sess-1`)
+    expect(calls[0]!.init?.method).toBe('PATCH')
+    const headers = calls[0]!.init?.headers as Record<string, string>
+    expect(headers['Content-Type']).toBe('application/json')
+    expect(JSON.parse(String(calls[0]!.init?.body))).toEqual({
+      external_appointment_id: 'appt-9',
+      mode: 'zoom',
+    })
+  })
+
+  it('serializes an explicit null external_appointment_id (clears the link)', async () => {
+    const { fetch, calls } = mockFetch([{ status: 200, body: { id: 'sess-1' } }])
+    await client(fetch).updateSession('sess-1', { external_appointment_id: null })
+    expect(JSON.parse(String(calls[0]!.init?.body))).toEqual({ external_appointment_id: null })
+  })
+
+  it('url-encodes the session id', async () => {
+    const { fetch, calls } = mockFetch([{ status: 200, body: { id: 'x' } }])
+    await client(fetch).updateSession('a/b c', { metadata: { a: 1 } })
+    expect(calls[0]!.url).toBe(`${BASE}/v1/${WS}/sessions/a%2Fb%20c`)
+  })
+
+  it('maps 404 to NotFoundError', async () => {
+    const { fetch } = mockFetch([{ status: 404, body: { message: 'no session' } }])
+    await expect(client(fetch).updateSession('nope', { metadata: {} })).rejects.toBeInstanceOf(
+      NotFoundError
+    )
+  })
+
+  it('requires a sessionId', async () => {
+    const { fetch } = mockFetch([{}])
+    await expect(client(fetch).updateSession('', { metadata: {} })).rejects.toBeInstanceOf(
+      ConfigurationError
+    )
+  })
+
+  it('requires a patch body (rejects null/undefined without issuing a request)', async () => {
+    const { fetch, calls } = mockFetch([{ status: 200, body: { id: 'x' } }])
+    const c = client(fetch)
+    // @ts-expect-error patch is required
+    await expect(c.updateSession('sess-1', undefined)).rejects.toBeInstanceOf(ConfigurationError)
+    // @ts-expect-error patch cannot be null
+    await expect(c.updateSession('sess-1', null)).rejects.toBeInstanceOf(ConfigurationError)
+    expect(calls).toHaveLength(0)
+  })
+})
+
+describe('endSession', () => {
+  it('POSTs to the end path with no body and returns the session', async () => {
+    const session = { id: 'sess-1', status: 'in-review' }
+    const { fetch, calls } = mockFetch([{ status: 200, body: session }])
+    const result = await client(fetch).endSession('sess-1')
+
+    expect(result).toEqual(session)
+    expect(calls[0]!.url).toBe(`${BASE}/v1/${WS}/sessions/sess-1/end`)
+    expect(calls[0]!.init?.method).toBe('POST')
+    expect(calls[0]!.init?.body).toBeUndefined()
+  })
+
+  it('url-encodes the session id', async () => {
+    const { fetch, calls } = mockFetch([{ status: 200, body: { id: 'x' } }])
+    await client(fetch).endSession('a/b c')
+    expect(calls[0]!.url).toBe(`${BASE}/v1/${WS}/sessions/a%2Fb%20c/end`)
+  })
+
+  it('maps 409 (live stream) to ConflictError', async () => {
+    const { fetch } = mockFetch([{ status: 409, body: { message: 'session_streaming' } }])
+    await expect(client(fetch).endSession('sess-1')).rejects.toBeInstanceOf(ConflictError)
+  })
+
+  it('maps 404 to NotFoundError', async () => {
+    const { fetch } = mockFetch([{ status: 404, body: { message: 'no session' } }])
+    await expect(client(fetch).endSession('nope')).rejects.toBeInstanceOf(NotFoundError)
+  })
+
+  it('requires a sessionId', async () => {
+    const { fetch } = mockFetch([{}])
+    await expect(client(fetch).endSession('')).rejects.toBeInstanceOf(ConfigurationError)
+  })
+})
+
+describe('cancelSession', () => {
+  it('POSTs to the cancel path with no body and returns the session', async () => {
+    const session = { id: 'sess-1', status: 'cancelled' }
+    const { fetch, calls } = mockFetch([{ status: 200, body: session }])
+    const result = await client(fetch).cancelSession('sess-1')
+
+    expect(result).toEqual(session)
+    expect(calls[0]!.url).toBe(`${BASE}/v1/${WS}/sessions/sess-1/cancel`)
+    expect(calls[0]!.init?.method).toBe('POST')
+    expect(calls[0]!.init?.body).toBeUndefined()
+  })
+
+  it('maps 409 (bad transition) to ConflictError', async () => {
+    const { fetch } = mockFetch([{ status: 409, body: { message: 'cannot cancel' } }])
+    await expect(client(fetch).cancelSession('sess-1')).rejects.toBeInstanceOf(ConflictError)
+  })
+
+  it('maps 404 to NotFoundError', async () => {
+    const { fetch } = mockFetch([{ status: 404, body: { message: 'no session' } }])
+    await expect(client(fetch).cancelSession('nope')).rejects.toBeInstanceOf(NotFoundError)
+  })
+
+  it('requires a sessionId', async () => {
+    const { fetch } = mockFetch([{}])
+    await expect(client(fetch).cancelSession('')).rejects.toBeInstanceOf(ConfigurationError)
+  })
+})
+
+describe('listAppointments', () => {
+  it('GETs /v1/{ws}/appointments and returns the page (with nested session)', async () => {
+    const page = {
+      items: [
+        { id: 'appt-1', session: { id: 'sess-1', status: 'completed' } },
+        { id: 'appt-2', session: null },
+      ],
+      has_more: true,
+      continuation_token: 'next-cursor',
+    }
+    const { fetch, calls } = mockFetch([{ status: 200, body: page }])
+    const result = await client(fetch).listAppointments()
+
+    expect(result).toEqual(page)
+    expect(calls[0]!.url).toBe(`${BASE}/v1/${WS}/appointments`)
+    expect(calls[0]!.init?.method).toBe('GET')
+    expect(calls[0]!.init?.body).toBeUndefined()
+  })
+
+  it('threads limit + continuation_token into the query string', async () => {
+    const { fetch, calls } = mockFetch([{ status: 200, body: { items: [], has_more: false } }])
+    await client(fetch).listAppointments({ limit: 25, continuation_token: 'abc def' })
+    expect(calls[0]!.url).toBe(`${BASE}/v1/${WS}/appointments?limit=25&continuation_token=abc+def`)
+  })
+
+  it('threads a numeric continuation_token from a prior page back in without a cast', async () => {
+    const { fetch, calls } = mockFetch([
+      { status: 200, body: { items: [{ id: 'a' }], has_more: true, continuation_token: 2 } },
+      { status: 200, body: { items: [{ id: 'b' }], has_more: false, continuation_token: null } },
+    ])
+    const c = client(fetch)
+    const first = await c.listAppointments({ limit: 2 })
+    await c.listAppointments({ limit: 2, continuation_token: first.continuation_token })
+    expect(calls[1]!.url).toBe(`${BASE}/v1/${WS}/appointments?limit=2&continuation_token=2`)
+  })
+
+  it('omits a null continuation_token (last page) instead of serializing "null"', async () => {
+    const { fetch, calls } = mockFetch([{ status: 200, body: { items: [], has_more: false } }])
+    await client(fetch).listAppointments({ limit: 2, continuation_token: null })
+    expect(calls[0]!.url).toBe(`${BASE}/v1/${WS}/appointments?limit=2`)
+  })
+
+  it('maps 403 to PermissionError', async () => {
+    const { fetch } = mockFetch([{ status: 403, body: { message: 'wrong workspace' } }])
+    await expect(client(fetch).listAppointments()).rejects.toBeInstanceOf(PermissionError)
+  })
+})
+
+describe('getAppointment', () => {
+  it('GETs /v1/{ws}/appointments/{id} and returns the appointment', async () => {
+    const appointment = { id: 'appt-1', session: { id: 'sess-1', status: 'in-review' } }
+    const { fetch, calls } = mockFetch([{ status: 200, body: appointment }])
+    const result = await client(fetch).getAppointment('appt-1')
+
+    expect(result).toEqual(appointment)
+    expect(calls[0]!.url).toBe(`${BASE}/v1/${WS}/appointments/appt-1`)
+    expect(calls[0]!.init?.method).toBe('GET')
+    expect(calls[0]!.init?.body).toBeUndefined()
+  })
+
+  it('url-encodes the appointment id', async () => {
+    const { fetch, calls } = mockFetch([{ status: 200, body: { id: 'x' } }])
+    await client(fetch).getAppointment('a/b c')
+    expect(calls[0]!.url).toBe(`${BASE}/v1/${WS}/appointments/a%2Fb%20c`)
+  })
+
+  it('maps 404 to NotFoundError', async () => {
+    const { fetch } = mockFetch([{ status: 404, body: { message: 'no appointment' } }])
+    await expect(client(fetch).getAppointment('nope')).rejects.toBeInstanceOf(NotFoundError)
+  })
+
+  it('requires an appointmentId', async () => {
+    const { fetch } = mockFetch([{}])
+    await expect(client(fetch).getAppointment('')).rejects.toBeInstanceOf(ConfigurationError)
+  })
+})
+
 describe('workspace + token handling', () => {
   it('allows per-call workspace override', async () => {
     const { fetch, calls } = mockFetch([{ status: 201, body: { id: 'x' } }])
