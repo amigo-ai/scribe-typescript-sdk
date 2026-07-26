@@ -8,6 +8,7 @@ import type {
   CodesResponse,
   CreateSessionRequest,
   FinalizeNoteResponse,
+  GeneratedCodesResponse,
   GenerateChecklistRequest,
   GeneratedChecklistResponse,
   GeneratedNoteResponse,
@@ -413,6 +414,27 @@ export class ScribeClient {
     }
     return this.http.request<CodesResponse>({
       method: 'GET',
+      path: `/v1/${workspaceId}/sessions/${encodeURIComponent(sessionId)}/codes`,
+      signal: options?.signal,
+    })
+  }
+
+  /**
+   * Generate the suggested ICD codes for a session and persist them.
+   *
+   * `POST /v1/{workspace_id}/sessions/{session_id}/codes` → 200. Requires
+   * `scribe:notes:rw_own`. Takes no request body. Derives from the canonical
+   * transcript + latest note, persists one `icd_suggestions` row per code, and
+   * returns the codes plus their generation metadata. Afterwards
+   * {@link ScribeClient.getCodes} reads the persisted rows back.
+   */
+  async generateCodes(sessionId: string, options?: CallOptions): Promise<GeneratedCodesResponse> {
+    const workspaceId = this.resolveWorkspaceId(options)
+    if (!sessionId) {
+      throw new ConfigurationError('sessionId is required', 'sessionId')
+    }
+    return this.http.request<GeneratedCodesResponse>({
+      method: 'POST',
       path: `/v1/${workspaceId}/sessions/${encodeURIComponent(sessionId)}/codes`,
       signal: options?.signal,
     })

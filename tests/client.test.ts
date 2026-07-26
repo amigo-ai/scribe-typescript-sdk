@@ -469,6 +469,43 @@ describe('getCodes', () => {
   })
 })
 
+describe('generateCodes', () => {
+  it('POSTs to the codes path with no body and returns the generated codes', async () => {
+    const generated = {
+      codes: {
+        session_id: 'sess-1',
+        items: [
+          {
+            code: 'E11.9',
+            description: 'Type 2 diabetes mellitus without complications',
+            rationale: 'documented in the note',
+            confidence: 0.9,
+            status: 'suggested',
+          },
+        ],
+      },
+      generation: { id: 'gen-1' },
+    }
+    const { fetch, calls } = mockFetch([{ status: 200, body: generated }])
+    const result = await client(fetch).generateCodes('sess-1')
+
+    expect(result).toEqual(generated)
+    expect(calls[0]!.url).toBe(`${BASE}/v1/${WS}/sessions/sess-1/codes`)
+    expect(calls[0]!.init?.method).toBe('POST')
+    expect(calls[0]!.init?.body).toBeUndefined()
+  })
+
+  it('maps 404 to NotFoundError', async () => {
+    const { fetch } = mockFetch([{ status: 404, body: { message: 'no session' } }])
+    await expect(client(fetch).generateCodes('nope')).rejects.toBeInstanceOf(NotFoundError)
+  })
+
+  it('requires a sessionId', async () => {
+    const { fetch } = mockFetch([{}])
+    await expect(client(fetch).generateCodes('')).rejects.toBeInstanceOf(ConfigurationError)
+  })
+})
+
 describe('updateSession', () => {
   it('PATCHes /v1/{ws}/sessions/{id} with the JSON patch body and returns the session', async () => {
     const session = {

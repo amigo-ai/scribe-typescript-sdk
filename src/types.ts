@@ -194,3 +194,6 @@ export type CodeSuggestionResponse = Schemas['CodeSuggestionResponse']
 
 /** Response from get-codes (`CodesResponse`) — the session's suggested billing/clinical codes. */
 export type CodesResponse = Schemas['CodesResponse']
+
+/** Response from generate-codes (`GeneratedCodesResponse`) — the codes plus their generation metadata. */
+export type GeneratedCodesResponse = Schemas['GeneratedCodesResponse']
