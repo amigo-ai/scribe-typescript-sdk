@@ -31,6 +31,7 @@ Artifacts (note / summary / checklist / codes):
 - `getChecklist` — `GET /v1/{workspace_id}/sessions/{session_id}/checklist`
 - `generateChecklist` — `POST /v1/{workspace_id}/sessions/{session_id}/checklist`
 - `getCodes` — `GET /v1/{workspace_id}/sessions/{session_id}/codes`
+- `generateCodes` — `POST /v1/{workspace_id}/sessions/{session_id}/codes`
 
 It also ships the **recording-independent streaming WebSocket API client**
 (`ScribeStreamClient`) — the WS transport/protocol layer that attaches with a

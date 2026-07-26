@@ -602,6 +602,22 @@
         "title": "GeneratedChecklistResponse",
         "type": "object"
       },
+      "GeneratedCodesResponse": {
+        "properties": {
+          "codes": {
+            "$ref": "#/components/schemas/CodesResponse"
+          },
+          "generation": {
+            "$ref": "#/components/schemas/GenerationMetadata"
+          }
+        },
+        "required": [
+          "codes",
+          "generation"
+        ],
+        "title": "GeneratedCodesResponse",
+        "type": "object"
+      },
       "GeneratedNoteResponse": {
         "properties": {
           "generation": {
@@ -1106,7 +1122,7 @@
     },
     "/v1/{workspace_id}/appointments": {
       "get": {
-        "description": "List appointments for the current calendar day (workspace + provider read-scoped).\n\nPhase 38 ships a deliberate static stub sourced from the superscribe-web seed (see\n`src/appointments.py`); the response contract is stable so the source can later swap to a\ndownstream customer API via a managed External Integration without a wire change. Paginated to\nmirror the sibling `list-sessions` endpoint (offset-based `limit` + opaque `continuation_token`).",
+        "description": "List appointments over a rolling date-anchored window (workspace + provider read-scoped).\n\nPhase 38 ships a deliberate static stub sourced from the superscribe-web seed (see\n`src/appointments.py`); the response contract is stable so the source can later swap to a\ndownstream customer API via a managed External Integration without a wire change. TESTING STOPGAP\n(phase 45a, SUPERSEDED BY PHASE 45): the stub emits a rolling window `[today - back, today +\nforward]` (env-tunable, defaults 14/30 → 360 items max) instead of today-only, so date-pinned\nappointment ids stay in-list across day-rollovers and the phase-41 session join keeps linking a\nsession created on a prior day. Paginated to mirror the sibling `list-sessions` endpoint\n(offset-based `limit` + opaque `continuation_token`); consumers page the full window and bucket\ninto past/today/upcoming client-side.",
         "operationId": "list-appointments",
         "parameters": [
           {
@@ -2241,6 +2257,108 @@
         "tags": [
           "Scribe sessions"
         ]
+      },
+      "post": {
+        "description": "Generate ICD-10-CM code suggestions for an owned session and persist them to icd_suggestions.\n\nMirrors ``generate_summary``: derives from the canonical transcript + latest note (no request\nbody), records a ``scribe.generations`` row (``artifact_kind='codes'``), prompts the model for\nstrict-JSON code suggestions, persists one ``scribe.icd_suggestions`` row per parsed code tied to\nthat generation, and reads the rows back with their provenance. ``GET .../codes`` then resolves.\nAn empty extraction (no grounded codes) is treated as a failed generation (marked failed, 503),\nkeeping the read-back invariant that a persisted generation always has rows.",
+        "operationId": "generate-session-codes",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GeneratedCodesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bearer token is absent or invalid."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The principal is outside this workspace or provider scope."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "No provider-owned resource exists at this URL."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Generation cannot proceed for the current session state."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Clinical generation is temporarily unavailable."
+          }
+        },
+        "summary": "Generate Codes",
+        "tags": [
+          "Scribe sessions"
+        ]
       }
     },
     "/v1/{workspace_id}/sessions/{session_id}/end": {
@@ -2654,6 +2772,100 @@
         ]
       }
     },
+    "/v1/{workspace_id}/sessions/{session_id}/start": {
+      "post": {
+        "description": "Mark an owned `created` session `in-progress` (PLAT-14).\n\nThe web BFF drives this for a Zoom session once the control plane reports the bot joined + RTMS\naudio flowing — mic sessions get `in-progress` implicitly from the WS attach instead. Idempotent:\ncalling it on an already `in-progress` session succeeds unchanged (a joined-event retry must not\n409); a terminal session returns 409 `invalid_session_state`.",
+        "operationId": "start-session",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bearer token is absent or invalid."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The principal is outside this workspace or provider scope."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "No provider-owned resource exists at this URL."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The session is not in a startable state (`invalid_session_state`)."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Start Session",
+        "tags": [
+          "Scribe sessions"
+        ]
+      }
+    },
     "/v1/{workspace_id}/sessions/{session_id}/summary": {
       "get": {
         "operationId": "get-session-summary",
@@ -2956,6 +3168,100 @@
           }
         },
         "summary": "Get Transcript",
+        "tags": [
+          "Scribe sessions"
+        ]
+      }
+    },
+    "/v1/{workspace_id}/sessions/{session_id}/zoom-finalize": {
+      "post": {
+        "description": "Finalize a Zoom session's transcript and flip it to `in-review` (PLAT-5 / §3A.2 handshake).\n\nGated on the control-plane `finalized` signal by the caller: the `stt-relay` pod has already\ndrained and flushed the final snapshot to the scribe-canonical prefix. This endpoint promotes\nthat snapshot to the canonical `transcript.json`, registers the `scribe.artifacts` row, then flips\n`in-progress -> in-review`. Only after this does `GET .../transcript` resolve for Zoom, so a\npartial transcript is never served (the click alone never transitions — the BFF waits for\n`finalized`). Idempotent: the promotion overwrites the same deterministic key and the flip\nno-ops if the reaper backstop already moved the row to `in-review`.\n\nRejects a non-Zoom session (409 `not_zoom_session`), a session whose snapshot has not been\ndrained (409 `transcript_not_finalized`), and a terminal session (409 `invalid_session_state`).\n\nTerminal-session integrity (principle 3, append-only): a `completed`/`cancelled`/`failed` session\nis immutable, so it must never gain a fresh transcript. This is enforced twice — an early\nstate pre-check skips the S3 promote for the common terminal case, and the artifact-row upsert is\ncommitted ONLY when the guarded transition actually flips (or idempotently re-confirms `in-review`)\ninside the same transaction. If the session goes terminal in the narrow race between the pre-check\nand the guarded UPDATE, no artifact row is committed and the 409 is returned; the already-written\n`transcript.json` is a harmless orphan — `GET .../transcript` requires the (absent) artifact row,\nso it is never served.",
+        "operationId": "finalize-zoom-session",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bearer token is absent or invalid."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The principal is outside this workspace or provider scope."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "No provider-owned resource exists at this URL."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The session is not a Zoom session (`not_zoom_session`), is not in a finalizable state (`invalid_session_state`), or its transcript has not been drained yet (`transcript_not_finalized`)."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Finalize Zoom Session",
         "tags": [
           "Scribe sessions"
         ]
