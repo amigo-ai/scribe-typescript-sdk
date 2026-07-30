@@ -101,7 +101,13 @@ export class HttpClient {
     }
     this.baseUrl = config.baseUrl.replace(/\/+$/, '')
     this.token = config.token
-    this.fetchImpl = resolvedFetch
+    // Bind to globalThis: native `fetch` must run with `this === globalThis`.
+    // Called as `this.fetchImpl(...)` an unbound reference would run with
+    // `this === HttpClient`, which throws "Illegal invocation" in browsers
+    // (TypeError). The guard above ensures `resolvedFetch` is callable, so
+    // `.bind` is safe; this covers both the default `globalThis.fetch` and any
+    // injected `config.fetch` (harmless for already-bound / arrow functions).
+    this.fetchImpl = resolvedFetch.bind(globalThis)
     this.defaultHeaders = config.defaultHeaders ?? {}
   }
 
