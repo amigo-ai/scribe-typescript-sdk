@@ -68,16 +68,15 @@ if (!hasCreds) {
 // variables with staging defaults) and read here from `process.env`; the
 // literals below are only a local-run fallback. NOTE: the identity (OTP/token)
 // host is `api-staging`, NOT `identity-staging`.
+// The host URLs are hard PREREQUISITES — no inline defaults. They come from the
+// injected env vars ONLY (CI supplies them from repository variables, gated by a
+// fail-fast preflight; local runs must export them). The staging identity/OTP
+// host is `api-staging`, NOT `identity-staging`.
 export const tokenEnv = {
-  /** Scribe CRUD base URL (from `SCRIBE_E2E_BASE_URL`; staging fallback). */
-  baseUrl: process.env.SCRIBE_E2E_BASE_URL ?? 'https://scribe-staging.platform.amigo.ai',
-  /**
-   * Identity `/token` base URL (from `SCRIBE_E2E_IDENTITY_BASE_URL`; staging
-   * fallback). Informational for the token suite — the JWT is pre-minted — but
-   * kept correct (`api-staging`) for the OTP flow that produces it.
-   */
-  identityBaseUrl:
-    process.env.SCRIBE_E2E_IDENTITY_BASE_URL ?? 'https://api-staging.platform.amigo.ai',
+  /** Scribe CRUD base URL (from `SCRIBE_E2E_BASE_URL`; required at use). */
+  baseUrl: process.env.SCRIBE_E2E_BASE_URL,
+  /** Identity `/token` base URL (from `SCRIBE_E2E_IDENTITY_BASE_URL`). */
+  identityBaseUrl: process.env.SCRIBE_E2E_IDENTITY_BASE_URL,
   /** Pre-minted provider JWT (aud=api.platform, carries `workspace_id`). */
   token: process.env.SCRIBE_E2E_TOKEN,
   /** Workspace id; falls back to the token's `workspace_id` claim when unset. */
@@ -90,8 +89,9 @@ export const hasToken = Boolean(tokenEnv.token) && !explicitlyDisabled
 if (!hasToken) {
   // eslint-disable-next-line no-console
   console.warn(
-    '[scribe ga token e2e] skipped — set SCRIBE_E2E_TOKEN (a provider JWT) ' +
-      '(and optionally SCRIBE_E2E_BASE_URL / SCRIBE_E2E_WORKSPACE_ID) to run.'
+    '[scribe ga token e2e] skipped — set SCRIBE_E2E_TOKEN (a provider JWT) to run; ' +
+      'SCRIBE_E2E_BASE_URL and SCRIBE_E2E_IDENTITY_BASE_URL are then required ' +
+      '(SCRIBE_E2E_WORKSPACE_ID optional — falls back to the token claim).'
   )
 }
 
@@ -115,6 +115,11 @@ export function resolveTokenWorkspaceId(): string {
  * token provider (exercises the async `TokenProvider` seam the web depends on).
  */
 export function makeTokenClient(): ScribeClient {
+  if (!tokenEnv.baseUrl) {
+    // Hard prerequisite: with a token present but no base URL the suite must
+    // fail loudly (token-absence is the only clean-skip condition).
+    throw new Error('SCRIBE_E2E_BASE_URL is required to run the GA token e2e suite')
+  }
   return new ScribeClient({
     baseUrl: tokenEnv.baseUrl,
     workspaceId: resolveTokenWorkspaceId(),
