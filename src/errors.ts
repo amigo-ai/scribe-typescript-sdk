@@ -70,6 +70,22 @@ export class ConfigurationError extends ScribeError {
   }
 }
 
+/**
+ * A per-call timeout elapsed before the request completed. Thrown when a
+ * `timeoutMs` (or an {@link AbortSignal.timeout}) fires; distinguishes a
+ * deadline from a caller-initiated abort or a transport failure.
+ */
+export class TimeoutError extends ScribeError {
+  constructor(
+    message: string,
+    public readonly timeoutMs?: number,
+    public readonly request?: { url?: string; method?: string }
+  ) {
+    super(message)
+    this.context = { request, timeoutMs }
+  }
+}
+
 /* Network / transport errors (no HTTP response received) */
 export class NetworkError extends ScribeError {
   constructor(

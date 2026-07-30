@@ -17,7 +17,7 @@
  *   SCRIBE_E2E_ENABLED=false     explicit opt-out
  */
 import 'dotenv/config'
-import { ScribeServerClient } from '../../src'
+import { ScribeClient, ScribeServerClient } from '../../src'
 import type { FetchLike } from '../../src'
 
 export const env = {
@@ -52,6 +52,68 @@ if (!hasCreds) {
       'SCRIBE_E2E_IDENTITY_BASE_URL, SCRIBE_E2E_WORKSPACE_ID, SCRIBE_E2E_PROVIDER_EMAIL, ' +
       'SCRIBE_M2M_CLIENT_ID, SCRIBE_M2M_CLIENT_SECRET to run.'
   )
+}
+
+// ---------------------------------------------------------------------------
+// Provider-JWT (token) gating — the GA 0.4.0 staging E2E (phases 02–08).
+//
+// Unlike the M2M-credential suites above (which mint their own provider token
+// via `ScribeServerClient`), the GA post-visit-mutation suite drives the raw
+// `ScribeClient` with a real provider JWT supplied out-of-band in
+// `SCRIBE_E2E_TOKEN` (obtained via the human-in-the-loop email-OTP flow; the
+// token is short-lived ~15 min). It NEVER mints or hardcodes credentials, and
+// self-skips (does not fail) when `SCRIBE_E2E_TOKEN` is absent.
+// ---------------------------------------------------------------------------
+export const tokenEnv = {
+  /** Scribe CRUD base URL (defaults to staging per the phase-10 spec). */
+  baseUrl: process.env.SCRIBE_E2E_BASE_URL ?? 'https://scribe-staging.platform.amigo.ai',
+  /** Identity base URL (defaults to staging; informational — the token is pre-minted). */
+  identityBaseUrl:
+    process.env.SCRIBE_E2E_IDENTITY_BASE_URL ?? 'https://identity-staging.platform.amigo.ai',
+  /** Pre-minted provider JWT (aud=api.platform, carries `workspace_id`). */
+  token: process.env.SCRIBE_E2E_TOKEN,
+  /** Workspace id; falls back to the token's `workspace_id` claim when unset. */
+  workspaceId: process.env.SCRIBE_E2E_WORKSPACE_ID,
+}
+
+/** True when a provider JWT is present and the suite is not opted out. */
+export const hasToken = Boolean(tokenEnv.token) && !explicitlyDisabled
+
+if (!hasToken) {
+  // eslint-disable-next-line no-console
+  console.warn(
+    '[scribe ga token e2e] skipped — set SCRIBE_E2E_TOKEN (a provider JWT) ' +
+      '(and optionally SCRIBE_E2E_BASE_URL / SCRIBE_E2E_WORKSPACE_ID) to run.'
+  )
+}
+
+/** The workspace id for the token suite — explicit env, else the token's `workspace_id` claim. */
+export function resolveTokenWorkspaceId(): string {
+  if (tokenEnv.workspaceId) {
+    return tokenEnv.workspaceId
+  }
+  const payload = decodeJwtPayload(tokenEnv.token!)
+  const ws = payload.workspace_id ?? payload.workspaceId
+  if (typeof ws !== 'string' || !ws) {
+    throw new Error(
+      'SCRIBE_E2E_WORKSPACE_ID is unset and the token carries no `workspace_id` claim'
+    )
+  }
+  return ws
+}
+
+/**
+ * A raw {@link ScribeClient} bound to the pre-minted provider JWT via an ASYNC
+ * token provider (exercises the async `TokenProvider` seam the web depends on).
+ */
+export function makeTokenClient(): ScribeClient {
+  return new ScribeClient({
+    baseUrl: tokenEnv.baseUrl,
+    workspaceId: resolveTokenWorkspaceId(),
+    // Async supplier (not a static string) on purpose — mirrors the web's
+    // short-lived-token refresh seam.
+    token: async () => tokenEnv.token!,
+  })
 }
 
 /** A unique, identifiable `external_id` for a throwaway session. */

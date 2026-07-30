@@ -30,15 +30,15 @@
  * (WS `end`); no grants / M2M clients are created.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { ScribeStreamClient, ServiceUnavailableError } from '../../src'
+import { isGenerationEnqueued, ScribeStreamClient, ServiceUnavailableError } from '../../src'
 import type {
-  ChecklistResponse,
-  CodesResponse,
-  NoteResponse,
+  ChecklistReadResponse,
+  CodesReadResponse,
+  NoteReadResponse,
   ScribeClient,
   ScribeServerClient,
   ScribeStreamState,
-  SummaryResponse,
+  SummaryReadResponse,
   TranscriptResponse,
 } from '../../src'
 import { e2eExternalId, env, hasCreds, makeServerClient, sleep, synthPcm16 } from './harness'
@@ -193,34 +193,42 @@ describe.runIf(hasCreds)('Scribe session lifecycle e2e (real happy-path artifact
     )
     await readArtifactTolerant(
       () => client.getNote(session.id),
-      (n: NoteResponse) => {
-        expect(n.session_id).toBeTruthy()
-        expect(typeof n.body).toBe('string')
-        expect(['draft', 'submitted', 'voided']).toContain(n.status)
+      (n: NoteReadResponse) => {
+        expect(['ready', 'pending', 'failed']).toContain(n.generation_status)
+        if (n.generation_status === 'ready') {
+          expect(typeof n.body === 'string' || n.structured != null).toBe(true)
+          expect(typeof n.version).toBe('number')
+        }
       },
       'getNote'
     )
     await readArtifactTolerant(
       () => client.getSummary(session.id),
-      (s: SummaryResponse) => {
-        expect(s.session_id).toBeTruthy()
-        expect(typeof s.summary).toBe('string')
+      (s: SummaryReadResponse) => {
+        expect(['ready', 'pending', 'failed']).toContain(s.generation_status)
+        if (s.generation_status === 'ready') {
+          expect(typeof s.summary).toBe('string')
+        }
       },
       'getSummary'
     )
     await readArtifactTolerant(
       () => client.getChecklist(session.id),
-      (c: ChecklistResponse) => {
-        expect(c.session_id).toBeTruthy()
-        expect(Array.isArray(c.items)).toBe(true)
+      (c: ChecklistReadResponse) => {
+        expect(['ready', 'pending', 'failed']).toContain(c.generation_status)
+        if (c.generation_status === 'ready') {
+          expect(Array.isArray(c.items)).toBe(true)
+        }
       },
       'getChecklist'
     )
     await readArtifactTolerant(
       () => client.getCodes(session.id),
-      (c: CodesResponse) => {
-        expect(c.session_id).toBeTruthy()
-        expect(Array.isArray(c.items)).toBe(true)
+      (c: CodesReadResponse) => {
+        expect(['ready', 'pending', 'failed']).toContain(c.generation_status)
+        if (c.generation_status === 'ready') {
+          expect(Array.isArray(c.items)).toBe(true)
+        }
       },
       'getCodes'
     )
@@ -236,8 +244,10 @@ async function generateChecklistTolerant(client: ScribeClient, sessionId: string
         { id: 'b', label: 'Vitals recorded' },
       ],
     })
-    expect(v.checklist).toBeTruthy()
-    expect(Array.isArray(v.checklist.items)).toBe(true)
+    if (!isGenerationEnqueued(v)) {
+      expect(v.checklist).toBeTruthy()
+      expect(Array.isArray(v.checklist.items)).toBe(true)
+    }
     // eslint-disable-next-line no-console
     console.warn('[lifecycle e2e] generateChecklist: generated')
   } catch (err) {
@@ -248,8 +258,10 @@ async function generateChecklistTolerant(client: ScribeClient, sessionId: string
 async function generateNoteTolerant(client: ScribeClient, sessionId: string): Promise<void> {
   try {
     const v = await client.generateNote(sessionId, { note_type: 'soap' })
-    expect(v.note).toBeTruthy()
-    expect(v.generation).toBeTruthy()
+    if (!isGenerationEnqueued(v)) {
+      expect(v.note).toBeTruthy()
+      expect(v.generation).toBeTruthy()
+    }
     // eslint-disable-next-line no-console
     console.warn('[lifecycle e2e] generateNote: generated')
   } catch (err) {
@@ -260,8 +272,10 @@ async function generateNoteTolerant(client: ScribeClient, sessionId: string): Pr
 async function generateSummaryTolerant(client: ScribeClient, sessionId: string): Promise<void> {
   try {
     const v = await client.generateSummary(sessionId)
-    expect(v.summary).toBeTruthy()
-    expect(v.generation).toBeTruthy()
+    if (!isGenerationEnqueued(v)) {
+      expect(v.summary).toBeTruthy()
+      expect(v.generation).toBeTruthy()
+    }
     // eslint-disable-next-line no-console
     console.warn('[lifecycle e2e] generateSummary: generated')
   } catch (err) {

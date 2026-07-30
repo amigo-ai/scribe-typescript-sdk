@@ -231,6 +231,53 @@
         "title": "ArtifactAvailabilityResponse",
         "type": "object"
       },
+      "ArtifactKind": {
+        "enum": [
+          "note",
+          "summary",
+          "checklist",
+          "codes"
+        ],
+        "type": "string"
+      },
+      "BotStatusEvent": {
+        "description": "`bot_status` SSE frame payload: the Zoom capture bot's lifecycle state (+ optional reason).\n\n`joining -> listening -> paused -> leaving -> done|error`; `reason` carries a machine string on the\noff-happy-path transitions (e.g. `join_timeout`). `done`/`error` are terminal: the event stream\ncloses right after relaying one so the client stops reconnecting.",
+        "properties": {
+          "reason": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "state": {
+            "enum": [
+              "joining",
+              "waiting_for_host",
+              "waiting_for_participant",
+              "playing_disclosure",
+              "listening",
+              "paused",
+              "idle",
+              "leaving",
+              "done",
+              "error"
+            ],
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "state"
+        ],
+        "title": "BotStatusEvent",
+        "type": "object"
+      },
       "ChecklistItemRequest": {
         "properties": {
           "id": {
@@ -295,6 +342,213 @@
         "title": "ChecklistItemResponse",
         "type": "object"
       },
+      "ChecklistItemStateResponse": {
+        "properties": {
+          "evidence": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence"
+          },
+          "id": {
+            "maxLength": 128,
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "maxLength": 500,
+            "title": "Label",
+            "type": "string"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "enum": [
+                  "manual",
+                  "auto"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "state": {
+            "enum": [
+              "open",
+              "checked"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          },
+          "updated_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated By"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "state"
+        ],
+        "title": "ChecklistItemStateResponse",
+        "type": "object"
+      },
+      "ChecklistItemToggle": {
+        "properties": {
+          "completed": {
+            "title": "Completed",
+            "type": "boolean"
+          },
+          "id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Id",
+            "type": "string"
+          },
+          "source": {
+            "const": "manual",
+            "default": "manual",
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "completed"
+        ],
+        "title": "ChecklistItemToggle",
+        "type": "object"
+      },
+      "ChecklistReadResponse": {
+        "properties": {
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ErrorDetail"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "generation_status": {
+            "$ref": "#/components/schemas/GenerationReadStatus"
+          },
+          "items": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ChecklistItemStateResponse"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Items"
+          },
+          "session_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Id"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "open",
+                  "completed",
+                  "archived"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "required": [
+          "generation_status"
+        ],
+        "title": "ChecklistReadResponse",
+        "type": "object"
+      },
       "ChecklistResponse": {
         "properties": {
           "created_at": {
@@ -345,6 +599,105 @@
         "title": "ChecklistResponse",
         "type": "object"
       },
+      "ChecklistStateResponse": {
+        "description": "Response of `PATCH /sessions/{id}/checklist`: the generated checklist with per-item manual\nstate + provenance overlaid, and status recomputed from the effective item states.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ChecklistItemStateResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "session_id": {
+            "format": "uuid",
+            "title": "Session Id",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "open",
+              "completed",
+              "archived"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "title": {
+            "maxLength": 256,
+            "title": "Title",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id",
+          "title",
+          "status",
+          "items",
+          "updated_at"
+        ],
+        "title": "ChecklistStateResponse",
+        "type": "object"
+      },
+      "CodeDecisionRequest": {
+        "description": "Body of `PATCH /sessions/{id}/codes/{suggestion_id}` (V340): the provider's per-suggestion\ndecision. Idempotent and re-decidable until finalize.",
+        "properties": {
+          "decision": {
+            "enum": [
+              "approved",
+              "rejected"
+            ],
+            "title": "Decision",
+            "type": "string"
+          }
+        },
+        "required": [
+          "decision"
+        ],
+        "title": "CodeDecisionRequest",
+        "type": "object"
+      },
+      "CodeDecisionResponse": {
+        "description": "200 body for a persisted code decision, with when it was decided (who is the caller).",
+        "properties": {
+          "code": {
+            "maxLength": 64,
+            "title": "Code",
+            "type": "string"
+          },
+          "decided_at": {
+            "format": "date-time",
+            "title": "Decided At",
+            "type": "string"
+          },
+          "decision": {
+            "enum": [
+              "approved",
+              "rejected"
+            ],
+            "title": "Decision",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "code",
+          "decision",
+          "decided_at"
+        ],
+        "title": "CodeDecisionResponse",
+        "type": "object"
+      },
       "CodeSuggestionResponse": {
         "properties": {
           "code": {
@@ -365,34 +718,92 @@
             ],
             "title": "Confidence"
           },
+          "decision": {
+            "anyOf": [
+              {
+                "enum": [
+                  "approved",
+                  "rejected"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision"
+          },
           "description": {
             "maxLength": 2000,
             "title": "Description",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
             "type": "string"
           },
           "rationale": {
             "maxLength": 10000,
             "title": "Rationale",
             "type": "string"
-          },
-          "status": {
-            "enum": [
-              "suggested",
-              "accepted",
-              "rejected",
-              "voided"
-            ],
-            "title": "Status",
-            "type": "string"
           }
         },
         "required": [
+          "id",
           "code",
           "description",
-          "rationale",
-          "status"
+          "rationale"
         ],
         "title": "CodeSuggestionResponse",
+        "type": "object"
+      },
+      "CodesReadResponse": {
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ErrorDetail"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "generation_status": {
+            "$ref": "#/components/schemas/GenerationReadStatus"
+          },
+          "items": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/CodeSuggestionResponse"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Items"
+          },
+          "session_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Id"
+          }
+        },
+        "required": [
+          "generation_status"
+        ],
+        "title": "CodesReadResponse",
         "type": "object"
       },
       "CodesResponse": {
@@ -513,6 +924,21 @@
           "correlation_id"
         ],
         "title": "ErrorResponse",
+        "type": "object"
+      },
+      "FinalizeNoteRequest": {
+        "description": "Body of `POST /sessions/{id}/note/finalize` (V340).\n\n`base_version` is the note version the provider is finalizing; a stale value returns\n409 version_conflict. Server-side gate validation runs on the *stored* document, not the\nrequest, so a client cannot bypass required-field gates.",
+        "properties": {
+          "base_version": {
+            "minimum": 1,
+            "title": "Base Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "base_version"
+        ],
+        "title": "FinalizeNoteRequest",
         "type": "object"
       },
       "FinalizeNoteResponse": {
@@ -650,6 +1076,41 @@
         "title": "GeneratedSummaryResponse",
         "type": "object"
       },
+      "GenerationEnqueueResponse": {
+        "description": "202 body for an enqueued (or collapsed-onto-in-flight) generation job.",
+        "properties": {
+          "generation": {
+            "$ref": "#/components/schemas/GenerationEnvelope"
+          }
+        },
+        "required": [
+          "generation"
+        ],
+        "title": "GenerationEnqueueResponse",
+        "type": "object"
+      },
+      "GenerationEnvelope": {
+        "properties": {
+          "artifact_kind": {
+            "$ref": "#/components/schemas/ArtifactKind"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/GenerationStatus"
+          }
+        },
+        "required": [
+          "id",
+          "artifact_kind",
+          "status"
+        ],
+        "title": "GenerationEnvelope",
+        "type": "object"
+      },
       "GenerationMetadata": {
         "properties": {
           "generated_at": {
@@ -691,6 +1152,22 @@
         "title": "GenerationMetadata",
         "type": "object"
       },
+      "GenerationReadStatus": {
+        "enum": [
+          "ready",
+          "pending",
+          "failed"
+        ],
+        "type": "string"
+      },
+      "GenerationStatus": {
+        "enum": [
+          "pending",
+          "succeeded",
+          "failed"
+        ],
+        "type": "string"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -702,6 +1179,141 @@
           }
         },
         "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "NoteReadResponse": {
+        "description": "Reload-safe note poller: artifact fields present only when generation_status == \"ready\".",
+        "properties": {
+          "body": {
+            "anyOf": [
+              {
+                "maxLength": 1000000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ErrorDetail"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "generated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Generated At"
+          },
+          "generation_status": {
+            "$ref": "#/components/schemas/GenerationReadStatus"
+          },
+          "session_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Id"
+          },
+          "signed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Signed At"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "draft",
+                  "submitted",
+                  "voided"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "structured": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Structured"
+          },
+          "type": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Type"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          }
+        },
+        "required": [
+          "generation_status"
+        ],
+        "title": "NoteReadResponse",
         "type": "object"
       },
       "NoteResponse": {
@@ -763,6 +1375,11 @@
             "format": "date-time",
             "title": "Updated At",
             "type": "string"
+          },
+          "version": {
+            "minimum": 1,
+            "title": "Version",
+            "type": "integer"
           }
         },
         "required": [
@@ -771,6 +1388,7 @@
           "status",
           "body",
           "structured",
+          "version",
           "generated_at",
           "signed_at",
           "updated_at"
@@ -889,7 +1507,6 @@
       },
       "SessionStatus": {
         "enum": [
-          "created",
           "in-progress",
           "in-review",
           "completed",
@@ -898,6 +1515,76 @@
         ],
         "title": "SessionStatus",
         "type": "string"
+      },
+      "SummaryReadResponse": {
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ErrorDetail"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "generated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Generated At"
+          },
+          "generation_status": {
+            "$ref": "#/components/schemas/GenerationReadStatus"
+          },
+          "session_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Id"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "maxLength": 10000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "required": [
+          "generation_status"
+        ],
+        "title": "SummaryReadResponse",
+        "type": "object"
       },
       "SummaryResponse": {
         "properties": {
@@ -929,6 +1616,31 @@
           "updated_at"
         ],
         "title": "SummaryResponse",
+        "type": "object"
+      },
+      "TicketResponse": {
+        "properties": {
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "ticket": {
+            "title": "Ticket",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ticket",
+          "expires_at"
+        ],
+        "title": "TicketResponse",
+        "type": "object"
+      },
+      "TranscriptFinalizedEvent": {
+        "description": "`transcript_finalized` SSE frame payload: emitted once, with no body, when the transcript is done.",
+        "properties": {},
+        "title": "TranscriptFinalizedEvent",
         "type": "object"
       },
       "TranscriptResponse": {
@@ -990,6 +1702,122 @@
           "end_ms"
         ],
         "title": "TranscriptSegment",
+        "type": "object"
+      },
+      "TranscriptSegmentEvent": {
+        "description": "`transcript_segment` / `interim_transcript` SSE frame payload — one transcript utterance.\n\n`transcript_segment` frames are finalized; `interim_transcript` frames are the not-yet-final\nhypothesis for the same `ordinal` (identical shape). Clients dedupe/replace by `ordinal`.",
+        "properties": {
+          "ordinal": {
+            "title": "Ordinal",
+            "type": "integer"
+          },
+          "speaker": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Speaker"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "timestamp": {
+            "maxLength": 64,
+            "title": "Timestamp",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ordinal",
+          "text",
+          "timestamp"
+        ],
+        "title": "TranscriptSegmentEvent",
+        "type": "object"
+      },
+      "UpdateChecklistRequest": {
+        "description": "Body of `PATCH /sessions/{id}/checklist` (V340): manual per-item toggles.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ChecklistItemToggle"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "UpdateChecklistRequest",
+        "type": "object"
+      },
+      "UpdateNoteRequest": {
+        "description": "Body of `PUT /sessions/{id}/note` — versioned note autosave (SPEC §6.1 P4).\n\nExactly one of `body` / `structured` is provided per write (a note type is either\nMarkdown-bodied or structured; AMD confirmations live inside `structured`). `base_version`\nis the version the client last read; a stale value loses the compare-and-set and returns\n409 version_conflict.",
+        "properties": {
+          "base_version": {
+            "minimum": 1,
+            "title": "Base Version",
+            "type": "integer"
+          },
+          "body": {
+            "anyOf": [
+              {
+                "maxLength": 1000000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body"
+          },
+          "structured": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Structured"
+          }
+        },
+        "required": [
+          "base_version"
+        ],
+        "title": "UpdateNoteRequest",
+        "type": "object"
+      },
+      "UpdateNoteResponse": {
+        "description": "200 body for a successful `PUT /sessions/{id}/note`: the new version + write time.",
+        "properties": {
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "version": {
+            "minimum": 1,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "version",
+          "updated_at"
+        ],
+        "title": "UpdateNoteResponse",
         "type": "object"
       },
       "UpdateSessionRequest": {
@@ -1071,6 +1899,229 @@
           "type"
         ],
         "title": "ValidationError",
+        "type": "object"
+      },
+      "ZoomAuthorizeResponse": {
+        "description": "Response of `POST /zoom/oauth/authorize`.\n\nThe browser navigates the top-level window to `authorize_url` (it cannot carry\nthe in-memory Bearer header on a redirect, so the single-use server-held state\nembedded in the URL is the credential the unauthenticated callback trusts).\n`expires_at` is when that state's short TTL lapses.",
+        "properties": {
+          "authorize_url": {
+            "maxLength": 2048,
+            "title": "Authorize Url",
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "authorize_url",
+          "expires_at"
+        ],
+        "title": "ZoomAuthorizeResponse",
+        "type": "object"
+      },
+      "ZoomBotControlResponse": {
+        "description": "Response of `POST /sessions/{id}/zoom/pause|resume`: the bot's status after the proxied\ncontrol-plane command. The live status transition also arrives over the event stream (phase 06);\nthis is the synchronous ack.",
+        "properties": {
+          "bot_status": {
+            "maxLength": 64,
+            "title": "Bot Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "bot_status"
+        ],
+        "title": "ZoomBotControlResponse",
+        "type": "object"
+      },
+      "ZoomConnectionResponse": {
+        "description": "Response of `GET /zoom/connection`. NEVER carries token material.\n\nDeliberately holds only a boolean plus non-sensitive display fields; the\nencrypted access/refresh tokens live only in `scribe.zoom_connections` and are\nresolved server-side (phase 05) to dispatch a bot, never returned to a browser.",
+        "properties": {
+          "connected": {
+            "title": "Connected",
+            "type": "boolean"
+          },
+          "connected_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Connected At"
+          },
+          "zoom_email": {
+            "anyOf": [
+              {
+                "maxLength": 320,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Zoom Email"
+          }
+        },
+        "required": [
+          "connected"
+        ],
+        "title": "ZoomConnectionResponse",
+        "type": "object"
+      },
+      "ZoomDisclosureRequest": {
+        "description": "Disclosure config for a Zoom capture bot (SPEC §6.1 P3).\n\n`enabled` gates whether the bot plays a recording-disclosure clip on join; `audio_key` names the\nclip when enabled. Passed through server-side to the control plane's bot dispatch — the browser\nnever talks to the control plane directly.",
+        "properties": {
+          "audio_key": {
+            "anyOf": [
+              {
+                "maxLength": 512,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audio Key"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled"
+        ],
+        "title": "ZoomDisclosureRequest",
+        "type": "object"
+      },
+      "ZoomSessionEndResponse": {
+        "description": "Response of `DELETE /sessions/{id}/zoom`: acknowledges that the drain + internal zoom-finalize\nis underway. The session flips to `in-review` asynchronously (reaper backstop).",
+        "properties": {
+          "status": {
+            "const": "draining",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "ZoomSessionEndResponse",
+        "type": "object"
+      },
+      "ZoomSessionEvent": {
+        "description": "One frame on the `GET /sessions/{id}/events` SSE stream (documents the wire contract for the SDK).\n\nEach frame is delivered as `event: <event>\\ndata: <json>\\n\\n`; `ping` carries an empty `{}` body\nand is a keepalive only. The stream is header-authenticated `fetch` streaming (not `EventSource`),\nreplays recent events on reconnect via `Last-Event-ID`, and closes after a terminal `bot_status`.",
+        "properties": {
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BotStatusEvent"
+              },
+              {
+                "$ref": "#/components/schemas/TranscriptSegmentEvent"
+              },
+              {
+                "$ref": "#/components/schemas/TranscriptFinalizedEvent"
+              },
+              {
+                "additionalProperties": true,
+                "type": "object"
+              }
+            ],
+            "title": "Data"
+          },
+          "event": {
+            "enum": [
+              "bot_status",
+              "transcript_segment",
+              "interim_transcript",
+              "transcript_finalized",
+              "ping"
+            ],
+            "title": "Event",
+            "type": "string"
+          }
+        },
+        "required": [
+          "event",
+          "data"
+        ],
+        "title": "ZoomSessionEvent",
+        "type": "object"
+      },
+      "ZoomSessionRequest": {
+        "description": "Body of `POST /zoom/sessions` — the whole Zoom capture saga behind one call.\n\nThe browser hands only a `meeting_link` + disclosure choice (never a `zoomAccessToken`): the\nScribe API creates the session, resolves the provider's STORED Zoom token, and dispatches the bot\nserver-side. `external_id` is the per-attempt idempotency key (same semantics as\n`CreateSessionRequest`).",
+        "properties": {
+          "disclosure": {
+            "$ref": "#/components/schemas/ZoomDisclosureRequest"
+          },
+          "external_appointment_id": {
+            "anyOf": [
+              {
+                "maxLength": 512,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Appointment Id"
+          },
+          "external_id": {
+            "anyOf": [
+              {
+                "maxLength": 512,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Id"
+          },
+          "meeting_link": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Meeting Link",
+            "type": "string"
+          },
+          "metadata": {
+            "additionalProperties": true,
+            "title": "Metadata",
+            "type": "object"
+          }
+        },
+        "required": [
+          "meeting_link",
+          "disclosure"
+        ],
+        "title": "ZoomSessionRequest",
+        "type": "object"
+      },
+      "ZoomSessionResponse": {
+        "description": "Response of `POST /zoom/sessions`: the created (`mode=zoom`, `in-progress`) session plus the\nid of the dispatched control-plane bot the live stream is bound to.",
+        "properties": {
+          "bot_id": {
+            "maxLength": 256,
+            "title": "Bot Id",
+            "type": "string"
+          },
+          "session": {
+            "$ref": "#/components/schemas/SessionResponse"
+          }
+        },
+        "required": [
+          "session",
+          "bot_id"
+        ],
+        "title": "ZoomSessionResponse",
         "type": "object"
       }
     }
@@ -1972,7 +3023,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ChecklistResponse"
+                  "$ref": "#/components/schemas/ChecklistReadResponse"
                 }
               }
             },
@@ -2044,6 +3095,108 @@
           "Scribe sessions"
         ]
       },
+      "patch": {
+        "description": "Merge manual per-item toggles into the checklist state, each provenanced (who/when, source).\n\nRequires a generated checklist (404 otherwise); every toggled id must belong to it (422 per-field\notherwise). Toggles are idempotent upserts, re-toggleable until finalize; 409 invalid_session_state\nonce the session is terminal. Auto-check state (phase 09) is written server-side, never here.",
+        "operationId": "update-session-checklist",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateChecklistRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChecklistStateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bearer token is absent or invalid."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The principal is outside this workspace or provider scope."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "No provider-owned resource exists at this URL."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The session is terminal and no longer accepts mutations (`invalid_session_state`)."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          }
+        },
+        "summary": "Update Checklist",
+        "tags": [
+          "Scribe sessions"
+        ]
+      },
       "post": {
         "operationId": "generate-session-checklist",
         "parameters": [
@@ -2084,6 +3237,24 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/GeneratedChecklistResponse"
+                }
+              }
+            },
+            "description": "An identical job already succeeded; the checklist is returned."
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/GeneratedChecklistResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/GenerationEnqueueResponse"
+                    }
+                  ],
+                  "title": "Response Generate-Session-Checklist"
                 }
               }
             },
@@ -2186,7 +3357,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CodesResponse"
+                  "$ref": "#/components/schemas/CodesReadResponse"
                 }
               }
             },
@@ -2259,7 +3430,7 @@
         ]
       },
       "post": {
-        "description": "Generate ICD-10-CM code suggestions for an owned session and persist them to icd_suggestions.\n\nMirrors ``generate_summary``: derives from the canonical transcript + latest note (no request\nbody), records a ``scribe.generations`` row (``artifact_kind='codes'``), prompts the model for\nstrict-JSON code suggestions, persists one ``scribe.icd_suggestions`` row per parsed code tied to\nthat generation, and reads the rows back with their provenance. ``GET .../codes`` then resolves.\nAn empty extraction (no grounded codes) is treated as a failed generation (marked failed, 503),\nkeeping the read-back invariant that a persisted generation always has rows.",
+        "description": "Enqueue ICD-10-CM code-suggestion generation for an owned session (explicit regenerate).\n\nAsync ensure-semantics: derives the idempotency identity from the canonical transcript + latest\nnote (no request body), then idempotently enqueues a ``scribe.generations`` job\n(``artifact_kind='codes'``). The worker prompts the model, parses strict-JSON suggestions, and\npersists one ``scribe.icd_suggestions`` row per code (an empty extraction is treated as a failed\ngeneration). Returns 202 with the job envelope, or 200 with the codes if an identical job already\nsucceeded. Codes are also auto-enqueued server-side when the note job succeeds.",
         "operationId": "generate-session-codes",
         "parameters": [
           {
@@ -2289,6 +3460,24 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/GeneratedCodesResponse"
+                }
+              }
+            },
+            "description": "An identical job already succeeded; the codes are returned."
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/GeneratedCodesResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/GenerationEnqueueResponse"
+                    }
+                  ],
+                  "title": "Response Generate-Session-Codes"
                 }
               }
             },
@@ -2356,6 +3545,120 @@
           }
         },
         "summary": "Generate Codes",
+        "tags": [
+          "Scribe sessions"
+        ]
+      }
+    },
+    "/v1/{workspace_id}/sessions/{session_id}/codes/{suggestion_id}": {
+      "patch": {
+        "description": "Record the provider's approve/reject decision on one ICD suggestion (SPEC §6.1 P4).\n\nIdempotent and re-decidable until finalize; 409 invalid_session_state once the session is terminal.\n404 when the suggestion is unknown or not owned by the provider.",
+        "operationId": "decide-session-code",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Session Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "suggestion_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Suggestion Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CodeDecisionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodeDecisionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bearer token is absent or invalid."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The principal is outside this workspace or provider scope."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "No provider-owned resource exists at this URL."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The session is terminal and no longer accepts mutations (`invalid_session_state`)."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          }
+        },
+        "summary": "Decide Code",
         "tags": [
           "Scribe sessions"
         ]
@@ -2455,6 +3758,111 @@
         ]
       }
     },
+    "/v1/{workspace_id}/sessions/{session_id}/events": {
+      "get": {
+        "description": "Bridge the Zoom control plane's event stream to the browser as SSE, under provider-JWT auth.\n\nResolves the owned, live Zoom session to its bound bot, then relays the control plane's Redis-backed\nevent stream (`bot_status` / transcript frames) with a 15 s `ping` keepalive, forwarding\n`Last-Event-ID` upstream for replay and closing cleanly after a terminal `bot_status`. `404` for a\nnon-Zoom, unknown, terminal, or bot-less session. The browser never talks to the control plane and\nholds only its own JWT.",
+        "operationId": "stream-zoom-session-events",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Session Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Last-Event-ID",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Last-Event-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ZoomSessionEvent"
+                }
+              },
+              "text/event-stream": {
+                "schema": {
+                  "$ref": "#/components/schemas/ZoomSessionEvent"
+                }
+              }
+            },
+            "description": "A live Server-Sent Event stream (header-authenticated `fetch` streaming, not `EventSource`). Emits `bot_status`, `transcript_segment` / `interim_transcript`, and `transcript_finalized` frames plus a `ping` keepalive every 15 s; replays recent events on reconnect via `Last-Event-ID` and closes after a terminal `bot_status`. Each frame is `event: <event>\\ndata: <json>\\n\\n`."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bearer token is absent or invalid."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The principal is outside this workspace or provider scope."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "No live Zoom event stream exists (non-Zoom, unknown, or terminal session)."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Stream Zoom Session Events",
+        "tags": [
+          "Scribe sessions"
+        ]
+      }
+    },
     "/v1/{workspace_id}/sessions/{session_id}/note": {
       "get": {
         "operationId": "get-session-note",
@@ -2485,7 +3893,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NoteResponse"
+                  "$ref": "#/components/schemas/NoteReadResponse"
                 }
               }
             },
@@ -2600,6 +4008,24 @@
                 }
               }
             },
+            "description": "An identical job already succeeded; the note is returned."
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/GeneratedNoteResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/GenerationEnqueueResponse"
+                    }
+                  ],
+                  "title": "Response Generate-Session-Note"
+                }
+              }
+            },
             "description": "Successful Response"
           },
           "401": {
@@ -2667,10 +4093,113 @@
         "tags": [
           "Scribe sessions"
         ]
+      },
+      "put": {
+        "description": "Versioned note autosave with optimistic concurrency (SPEC §6.1 P4).\n\nWrites exactly one of body/structured to the latest draft note via a single-statement\ncompare-and-set on `version`, so two racing writers with the same base_version yield exactly one\nsuccess and one 409 version_conflict. Rejected once the session is terminal (append-only, 409\ninvalid_session_state). 404 when no note has been generated yet.",
+        "operationId": "update-session-note",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateNoteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateNoteResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bearer token is absent or invalid."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The principal is outside this workspace or provider scope."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "No provider-owned resource exists at this URL."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The base_version is stale (`version_conflict`) or the session is terminal (`invalid_session_state`)."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          }
+        },
+        "summary": "Update Note",
+        "tags": [
+          "Scribe sessions"
+        ]
       }
     },
     "/v1/{workspace_id}/sessions/{session_id}/note/finalize": {
       "post": {
+        "description": "Server-authoritative finalize (SPEC §6.1 P4): validate gates on the stored note, then atomically\nsubmit the note + complete the session.\n\nOptimistic concurrency via `base_version`; AMD/template required-field gates run on the STORED\ndocument (a client cannot bypass them by omitting fields from the request). An already-submitted\nnote is an idempotent 200. A terminal cancelled/failed session is 409 invalid_session_state and the\nnote submit is rolled back with it (the two writes are one unit of work).",
         "operationId": "finalize-session-note",
         "parameters": [
           {
@@ -2694,6 +4223,16 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FinalizeNoteRequest"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "content": {
@@ -2743,7 +4282,7 @@
                 }
               }
             },
-            "description": "Generation cannot proceed for the current session state."
+            "description": "The base_version is stale (`version_conflict`) or the session is terminal and cannot be completed by finalize (`invalid_session_state`)."
           },
           "422": {
             "content": {
@@ -2753,114 +4292,10 @@
                 }
               }
             },
-            "description": "Request validation failed."
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Clinical generation is temporarily unavailable."
+            "description": "A required AMD/template field is missing on the stored note (`finalize_validation_failed`)."
           }
         },
         "summary": "Finalize Note",
-        "tags": [
-          "Scribe sessions"
-        ]
-      }
-    },
-    "/v1/{workspace_id}/sessions/{session_id}/start": {
-      "post": {
-        "description": "Mark an owned `created` session `in-progress` (PLAT-14).\n\nThe web BFF drives this for a Zoom session once the control plane reports the bot joined + RTMS\naudio flowing — mic sessions get `in-progress` implicitly from the WS attach instead. Idempotent:\ncalling it on an already `in-progress` session succeeds unchanged (a joined-event retry must not\n409); a terminal session returns 409 `invalid_session_state`.",
-        "operationId": "start-session",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "workspace_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Workspace Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "session_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Session Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SessionResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bearer token is absent or invalid."
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "The principal is outside this workspace or provider scope."
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "No provider-owned resource exists at this URL."
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "The session is not in a startable state (`invalid_session_state`)."
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Start Session",
         "tags": [
           "Scribe sessions"
         ]
@@ -2896,7 +4331,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SummaryResponse"
+                  "$ref": "#/components/schemas/SummaryReadResponse"
                 }
               }
             },
@@ -3001,6 +4436,24 @@
                 }
               }
             },
+            "description": "An identical job already succeeded; the summary is returned."
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/GeneratedSummaryResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/GenerationEnqueueResponse"
+                    }
+                  ],
+                  "title": "Response Generate-Session-Summary"
+                }
+              }
+            },
             "description": "Successful Response"
           },
           "401": {
@@ -3065,6 +4518,110 @@
           }
         },
         "summary": "Generate Summary",
+        "tags": [
+          "Scribe sessions"
+        ]
+      }
+    },
+    "/v1/{workspace_id}/sessions/{session_id}/ticket": {
+      "post": {
+        "description": "Mint a WS attach ticket for an owned, non-terminal session and return `{ticket, expires_at}`.\n\nA thin server-side wrapper over identity's RFC 8693 ``token_exchange`` grant (the mint lives in\nidentity): it forwards the browser's raw provider JWT as ``subject_token`` so identity binds the\nticket to this session/workspace/provider (``aud=scribe-streaming``, scope\n``scribe:streams:connect``, ~5-min TTL). Routing this through the Scribe API keeps the browser's\nCORS surface a single service — CORS can't scope identity's ``/token`` to one grant type. The SDK\n`connectionProvider` calls this on every (re)connect and presents the ticket at the streaming\nworker's WS handshake.",
+        "operationId": "mint-attach-ticket",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TicketResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bearer token is absent or invalid."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing scribe:sessions:write, wrong provider, or identity rejected the subject token."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "No provider-owned session exists at this URL."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The session is terminal; no attach ticket can be minted."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Ticket minting is temporarily unavailable; please retry."
+          }
+        },
+        "summary": "Mint Attach Ticket",
         "tags": [
           "Scribe sessions"
         ]
@@ -3173,10 +4730,10 @@
         ]
       }
     },
-    "/v1/{workspace_id}/sessions/{session_id}/zoom-finalize": {
-      "post": {
-        "description": "Finalize a Zoom session's transcript and flip it to `in-review` (PLAT-5 / §3A.2 handshake).\n\nGated on the control-plane `finalized` signal by the caller: the `stt-relay` pod has already\ndrained and flushed the final snapshot to the scribe-canonical prefix. This endpoint promotes\nthat snapshot to the canonical `transcript.json`, registers the `scribe.artifacts` row, then flips\n`in-progress -> in-review`. Only after this does `GET .../transcript` resolve for Zoom, so a\npartial transcript is never served (the click alone never transitions — the BFF waits for\n`finalized`). Idempotent: the promotion overwrites the same deterministic key and the flip\nno-ops if the reaper backstop already moved the row to `in-review`.\n\nRejects a non-Zoom session (409 `not_zoom_session`), a session whose snapshot has not been\ndrained (409 `transcript_not_finalized`), and a terminal session (409 `invalid_session_state`).\n\nTerminal-session integrity (principle 3, append-only): a `completed`/`cancelled`/`failed` session\nis immutable, so it must never gain a fresh transcript. This is enforced twice — an early\nstate pre-check skips the S3 promote for the common terminal case, and the artifact-row upsert is\ncommitted ONLY when the guarded transition actually flips (or idempotently re-confirms `in-review`)\ninside the same transaction. If the session goes terminal in the narrow race between the pre-check\nand the guarded UPDATE, no artifact row is committed and the 409 is returned; the already-written\n`transcript.json` is a harmless orphan — `GET .../transcript` requires the (absent) artifact row,\nso it is never served.",
-        "operationId": "finalize-zoom-session",
+    "/v1/{workspace_id}/sessions/{session_id}/zoom": {
+      "delete": {
+        "description": "End a Zoom session: 202 immediately, then drain the bot + internally finalize in the background.\n\nReturns `{status: \"draining\"}` right away; the background task stops the bot and runs the internal\nzoom-finalize (promote the drained snapshot -> `transcript.json`, flip -> `in-review`) with a\nbounded retry over the drain window. Idempotent: a second DELETE still 202s and no-ops (the drain\ntask sees the already-finalized session and skips promotion). 409 `not_zoom_session` for a mic\nsession.",
+        "operationId": "end-zoom-session",
         "parameters": [
           {
             "in": "path",
@@ -3200,11 +4757,11 @@
           }
         ],
         "responses": {
-          "200": {
+          "202": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SessionResponse"
+                  "$ref": "#/components/schemas/ZoomSessionEndResponse"
                 }
               }
             },
@@ -3248,7 +4805,7 @@
                 }
               }
             },
-            "description": "The session is not a Zoom session (`not_zoom_session`), is not in a finalizable state (`invalid_session_state`), or its transcript has not been drained yet (`transcript_not_finalized`)."
+            "description": "The session is not a Zoom session (`not_zoom_session`)."
           },
           "422": {
             "content": {
@@ -3261,7 +4818,574 @@
             "description": "Validation Error"
           }
         },
-        "summary": "Finalize Zoom Session",
+        "summary": "End Zoom Session",
+        "tags": [
+          "Scribe sessions"
+        ]
+      }
+    },
+    "/v1/{workspace_id}/sessions/{session_id}/zoom/pause": {
+      "post": {
+        "description": "Pause the Zoom capture bot bound to an owned session (proxies the control plane).",
+        "operationId": "pause-zoom-bot",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ZoomBotControlResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bearer token is absent or invalid."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The principal is outside this workspace or provider scope."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "No provider-owned resource exists at this URL."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "No live Zoom bot is bound to this session (`bot_not_active`)."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The control plane failed to deliver the command (`bot_command_failed`)."
+          }
+        },
+        "summary": "Pause Zoom Bot",
+        "tags": [
+          "Scribe sessions"
+        ]
+      }
+    },
+    "/v1/{workspace_id}/sessions/{session_id}/zoom/resume": {
+      "post": {
+        "description": "Resume the Zoom capture bot bound to an owned session (proxies the control plane).",
+        "operationId": "resume-zoom-bot",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ZoomBotControlResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bearer token is absent or invalid."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The principal is outside this workspace or provider scope."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "No provider-owned resource exists at this URL."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "No live Zoom bot is bound to this session (`bot_not_active`)."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The control plane failed to deliver the command (`bot_command_failed`)."
+          }
+        },
+        "summary": "Resume Zoom Bot",
+        "tags": [
+          "Scribe sessions"
+        ]
+      }
+    },
+    "/v1/{workspace_id}/zoom/connection": {
+      "delete": {
+        "description": "Disconnect Zoom: best-effort revoke at Zoom, delete the row. Idempotent -- deleting a\nnon-existent connection still returns 204.",
+        "operationId": "delete-zoom-connection",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bearer token is absent or invalid."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The principal is outside this workspace or provider scope."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Zoom Connection",
+        "tags": [
+          "Scribe sessions"
+        ]
+      },
+      "get": {
+        "description": "Whether the calling provider has a Zoom connection. NEVER returns token material.",
+        "operationId": "get-zoom-connection",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ZoomConnectionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bearer token is absent or invalid."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The principal is outside this workspace or provider scope."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Zoom Connection",
+        "tags": [
+          "Scribe sessions"
+        ]
+      }
+    },
+    "/v1/{workspace_id}/zoom/oauth/authorize": {
+      "post": {
+        "description": "Begin the Zoom connect flow: mint a single-use server-held state + PKCE verifier bound to the\nprovider/workspace and return the short-lived Zoom authorize URL the browser navigates to.",
+        "operationId": "start-zoom-oauth",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ZoomAuthorizeResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bearer token is absent or invalid."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The principal is outside this workspace or provider scope."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Zoom connect is temporarily unavailable; retry."
+          }
+        },
+        "summary": "Start Zoom Oauth",
+        "tags": [
+          "Scribe sessions"
+        ]
+      }
+    },
+    "/v1/{workspace_id}/zoom/oauth/callback": {
+      "get": {
+        "description": "Unauthenticated Zoom redirect target (NO Bearer -- the single-use state is the credential).\n\nValidates + atomically consumes (GETDEL) the state, exchanges the code + PKCE verifier, and stores\nthe encrypted tokens. Every failure -- invalid/expired/replayed state, missing code, failed\nexchange -- 302s to the web settings route with an error flag and renders no JSON to the human.\nOpted out of the provider-JWT dependency simply by omitting `claims: ScribeClaimsParam`.",
+        "operationId": "complete-zoom-oauth",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "code",
+            "required": false,
+            "schema": {
+              "default": "",
+              "maxLength": 2048,
+              "title": "Code",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "state",
+            "required": false,
+            "schema": {
+              "default": "",
+              "maxLength": 512,
+              "title": "State",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "302": {
+            "description": "Redirect to the web settings route with a `zoom_connected=true` flag on success or a `zoom_error=<reason>` flag on an invalid/expired/replayed state or a failed exchange."
+          },
+          "307": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Complete Zoom Oauth",
+        "tags": [
+          "Scribe sessions"
+        ]
+      }
+    },
+    "/v1/{workspace_id}/zoom/sessions": {
+      "post": {
+        "description": "Run the whole Zoom capture saga server-side and return `{session, bot_id}` (201).\n\nIn order: validate the meeting link; friendly per-practitioner active-Zoom pre-check; resolve +\ndecrypt the STORED Zoom token (409 `zoom_not_connected` if absent); create the session (born\n`in-progress`, `mode=zoom`, `external_id` idempotency); dispatch the bot via the control plane\nwith the resolved token. On dispatch failure the session is CANCELLED and any straggler bot reaped\n(503 `bot_dispatch_failed`) so nothing is orphaned. A duplicate/idempotent create whose bot is\nalready running recovers that bot instead of dispatching a second one.",
+        "operationId": "create-zoom-session",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ZoomSessionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ZoomSessionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "meeting_link is not a valid Zoom meeting URL (`invalid_meeting_link`)."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bearer token is absent or invalid."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The principal is outside this workspace or provider scope."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The practitioner already has an active Zoom session (`active_zoom_session_exists`), the idempotency key was reused with a different fingerprint (`idempotency_key_conflict`), or the provider has not connected Zoom (`zoom_not_connected`)."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bot dispatch failed; the session was compensated/cancelled (`bot_dispatch_failed`)."
+          }
+        },
+        "summary": "Create Zoom Session",
         "tags": [
           "Scribe sessions"
         ]

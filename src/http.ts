@@ -1,4 +1,4 @@
-import { ConfigurationError, NetworkError, createApiError } from './errors'
+import { ConfigurationError, NetworkError, TimeoutError, createApiError } from './errors'
 
 /** A `fetch`-compatible function. Injectable for testing / custom transports. */
 export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>
@@ -29,7 +29,52 @@ export interface RequestOptions {
   path: string
   query?: Record<string, string | number | boolean | undefined>
   body?: unknown
+  /** Caller abort signal for cancellation. Combined with `timeoutMs` if both set. */
   signal?: AbortSignal
+  /**
+   * Per-call deadline in ms. When it elapses the request is aborted and a
+   * {@link TimeoutError} is thrown. Implemented on top of `AbortSignal`, so it
+   * composes with a caller-supplied `signal` (whichever fires first wins).
+   */
+  timeoutMs?: number
+}
+
+/**
+ * Compose a caller {@link AbortSignal} with a per-call timeout into a single
+ * signal. Returns the combined signal, a `cleanup()` to clear the timer +
+ * listener, and `timedOut()` to distinguish a deadline from a caller abort.
+ *
+ * Uses a linked {@link AbortController} rather than `AbortSignal.any` +
+ * `AbortSignal.timeout` so the timeout reason is inspectable and the helper
+ * works on any runtime with `AbortController` (all supported Node + browsers).
+ */
+export function combineAbortSignal(
+  signal: AbortSignal | undefined,
+  timeoutMs: number | undefined
+): { signal: AbortSignal | undefined; cleanup: () => void; timedOut: () => boolean } {
+  if (timeoutMs === undefined) {
+    return { signal, cleanup: () => {}, timedOut: () => false }
+  }
+  const controller = new AbortController()
+  let didTimeOut = false
+  const onTimeout = () => {
+    didTimeOut = true
+    controller.abort(new Error(`Request timed out after ${timeoutMs}ms`))
+  }
+  const timer = setTimeout(onTimeout, timeoutMs)
+  const onAbort = () => controller.abort((signal as AbortSignal).reason)
+  if (signal) {
+    if (signal.aborted) {
+      onAbort()
+    } else {
+      signal.addEventListener('abort', onAbort, { once: true })
+    }
+  }
+  const cleanup = () => {
+    clearTimeout(timer)
+    signal?.removeEventListener('abort', onAbort)
+  }
+  return { signal: controller.signal, cleanup, timedOut: () => didTimeOut }
 }
 
 /**
@@ -92,10 +137,12 @@ export class HttpClient {
       ...this.defaultHeaders,
     }
 
+    const { signal, cleanup, timedOut } = combineAbortSignal(options.signal, options.timeoutMs)
+
     const init: RequestInit = {
       method: options.method,
       headers,
-      signal: options.signal,
+      signal,
     }
 
     if (options.body !== undefined) {
@@ -107,11 +154,23 @@ export class HttpClient {
     try {
       response = await this.fetchImpl(url, init)
     } catch (err) {
+      if (timedOut()) {
+        throw new TimeoutError(
+          `Request timed out after ${options.timeoutMs}ms`,
+          options.timeoutMs,
+          {
+            url,
+            method: options.method,
+          }
+        )
+      }
       throw new NetworkError(
         `Network request failed: ${err instanceof Error ? err.message : String(err)}`,
         err instanceof Error ? err : new Error(String(err)),
         { url, method: options.method }
       )
+    } finally {
+      cleanup()
     }
 
     if (!response.ok) {

@@ -190,7 +190,15 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Update Checklist
+         * @description Merge manual per-item toggles into the checklist state, each provenanced (who/when, source).
+         *
+         *     Requires a generated checklist (404 otherwise); every toggled id must belong to it (422 per-field
+         *     otherwise). Toggles are idempotent upserts, re-toggleable until finalize; 409 invalid_session_state
+         *     once the session is terminal. Auto-check state (phase 09) is written server-side, never here.
+         */
+        patch: operations["update-session-checklist"];
         trace?: never;
     };
     "/v1/{workspace_id}/sessions/{session_id}/codes": {
@@ -205,20 +213,43 @@ export interface paths {
         put?: never;
         /**
          * Generate Codes
-         * @description Generate ICD-10-CM code suggestions for an owned session and persist them to icd_suggestions.
+         * @description Enqueue ICD-10-CM code-suggestion generation for an owned session (explicit regenerate).
          *
-         *     Mirrors ``generate_summary``: derives from the canonical transcript + latest note (no request
-         *     body), records a ``scribe.generations`` row (``artifact_kind='codes'``), prompts the model for
-         *     strict-JSON code suggestions, persists one ``scribe.icd_suggestions`` row per parsed code tied to
-         *     that generation, and reads the rows back with their provenance. ``GET .../codes`` then resolves.
-         *     An empty extraction (no grounded codes) is treated as a failed generation (marked failed, 503),
-         *     keeping the read-back invariant that a persisted generation always has rows.
+         *     Async ensure-semantics: derives the idempotency identity from the canonical transcript + latest
+         *     note (no request body), then idempotently enqueues a ``scribe.generations`` job
+         *     (``artifact_kind='codes'``). The worker prompts the model, parses strict-JSON suggestions, and
+         *     persists one ``scribe.icd_suggestions`` row per code (an empty extraction is treated as a failed
+         *     generation). Returns 202 with the job envelope, or 200 with the codes if an identical job already
+         *     succeeded. Codes are also auto-enqueued server-side when the note job succeeds.
          */
         post: operations["generate-session-codes"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/v1/{workspace_id}/sessions/{session_id}/codes/{suggestion_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Decide Code
+         * @description Record the provider's approve/reject decision on one ICD suggestion (SPEC §6.1 P4).
+         *
+         *     Idempotent and re-decidable until finalize; 409 invalid_session_state once the session is terminal.
+         *     404 when the suggestion is unknown or not owned by the provider.
+         */
+        patch: operations["decide-session-code"];
         trace?: never;
     };
     "/v1/{workspace_id}/sessions/{session_id}/end": {
@@ -245,6 +276,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/{workspace_id}/sessions/{session_id}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Stream Zoom Session Events
+         * @description Bridge the Zoom control plane's event stream to the browser as SSE, under provider-JWT auth.
+         *
+         *     Resolves the owned, live Zoom session to its bound bot, then relays the control plane's Redis-backed
+         *     event stream (`bot_status` / transcript frames) with a 15 s `ping` keepalive, forwarding
+         *     `Last-Event-ID` upstream for replay and closing cleanly after a terminal `bot_status`. `404` for a
+         *     non-Zoom, unknown, terminal, or bot-less session. The browser never talks to the control plane and
+         *     holds only its own JWT.
+         */
+        get: operations["stream-zoom-session-events"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/{workspace_id}/sessions/{session_id}/note": {
         parameters: {
             query?: never;
@@ -254,7 +311,16 @@ export interface paths {
         };
         /** Get Note */
         get: operations["get-session-note"];
-        put?: never;
+        /**
+         * Update Note
+         * @description Versioned note autosave with optimistic concurrency (SPEC §6.1 P4).
+         *
+         *     Writes exactly one of body/structured to the latest draft note via a single-statement
+         *     compare-and-set on `version`, so two racing writers with the same base_version yield exactly one
+         *     success and one 409 version_conflict. Rejected once the session is terminal (append-only, 409
+         *     invalid_session_state). 404 when no note has been generated yet.
+         */
+        put: operations["update-session-note"];
         /** Generate Note */
         post: operations["generate-session-note"];
         delete?: never;
@@ -272,33 +338,17 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Finalize Note */
-        post: operations["finalize-session-note"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/{workspace_id}/sessions/{session_id}/start": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
         /**
-         * Start Session
-         * @description Mark an owned `created` session `in-progress` (PLAT-14).
+         * Finalize Note
+         * @description Server-authoritative finalize (SPEC §6.1 P4): validate gates on the stored note, then atomically
+         *     submit the note + complete the session.
          *
-         *     The web BFF drives this for a Zoom session once the control plane reports the bot joined + RTMS
-         *     audio flowing — mic sessions get `in-progress` implicitly from the WS attach instead. Idempotent:
-         *     calling it on an already `in-progress` session succeeds unchanged (a joined-event retry must not
-         *     409); a terminal session returns 409 `invalid_session_state`.
+         *     Optimistic concurrency via `base_version`; AMD/template required-field gates run on the STORED
+         *     document (a client cannot bypass them by omitting fields from the request). An already-submitted
+         *     note is an idempotent 200. A terminal cancelled/failed session is 409 invalid_session_state and the
+         *     note submit is rolled back with it (the two writes are one unit of work).
          */
-        post: operations["start-session"];
+        post: operations["finalize-session-note"];
         delete?: never;
         options?: never;
         head?: never;
@@ -323,6 +373,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/{workspace_id}/sessions/{session_id}/ticket": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mint Attach Ticket
+         * @description Mint a WS attach ticket for an owned, non-terminal session and return `{ticket, expires_at}`.
+         *
+         *     A thin server-side wrapper over identity's RFC 8693 ``token_exchange`` grant (the mint lives in
+         *     identity): it forwards the browser's raw provider JWT as ``subject_token`` so identity binds the
+         *     ticket to this session/workspace/provider (``aud=scribe-streaming``, scope
+         *     ``scribe:streams:connect``, ~5-min TTL). Routing this through the Scribe API keeps the browser's
+         *     CORS surface a single service — CORS can't scope identity's ``/token`` to one grant type. The SDK
+         *     `connectionProvider` calls this on every (re)connect and presents the ticket at the streaming
+         *     worker's WS handshake.
+         */
+        post: operations["mint-attach-ticket"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/{workspace_id}/sessions/{session_id}/transcript": {
         parameters: {
             query?: never;
@@ -340,7 +418,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/{workspace_id}/sessions/{session_id}/zoom-finalize": {
+    "/v1/{workspace_id}/sessions/{session_id}/zoom": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * End Zoom Session
+         * @description End a Zoom session: 202 immediately, then drain the bot + internally finalize in the background.
+         *
+         *     Returns `{status: "draining"}` right away; the background task stops the bot and runs the internal
+         *     zoom-finalize (promote the drained snapshot -> `transcript.json`, flip -> `in-review`) with a
+         *     bounded retry over the drain window. Idempotent: a second DELETE still 202s and no-ops (the drain
+         *     task sees the already-finalized session and skips promotion). 409 `not_zoom_session` for a mic
+         *     session.
+         */
+        delete: operations["end-zoom-session"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/{workspace_id}/sessions/{session_id}/zoom/pause": {
         parameters: {
             query?: never;
             header?: never;
@@ -350,30 +454,128 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Finalize Zoom Session
-         * @description Finalize a Zoom session's transcript and flip it to `in-review` (PLAT-5 / §3A.2 handshake).
-         *
-         *     Gated on the control-plane `finalized` signal by the caller: the `stt-relay` pod has already
-         *     drained and flushed the final snapshot to the scribe-canonical prefix. This endpoint promotes
-         *     that snapshot to the canonical `transcript.json`, registers the `scribe.artifacts` row, then flips
-         *     `in-progress -> in-review`. Only after this does `GET .../transcript` resolve for Zoom, so a
-         *     partial transcript is never served (the click alone never transitions — the BFF waits for
-         *     `finalized`). Idempotent: the promotion overwrites the same deterministic key and the flip
-         *     no-ops if the reaper backstop already moved the row to `in-review`.
-         *
-         *     Rejects a non-Zoom session (409 `not_zoom_session`), a session whose snapshot has not been
-         *     drained (409 `transcript_not_finalized`), and a terminal session (409 `invalid_session_state`).
-         *
-         *     Terminal-session integrity (principle 3, append-only): a `completed`/`cancelled`/`failed` session
-         *     is immutable, so it must never gain a fresh transcript. This is enforced twice — an early
-         *     state pre-check skips the S3 promote for the common terminal case, and the artifact-row upsert is
-         *     committed ONLY when the guarded transition actually flips (or idempotently re-confirms `in-review`)
-         *     inside the same transaction. If the session goes terminal in the narrow race between the pre-check
-         *     and the guarded UPDATE, no artifact row is committed and the 409 is returned; the already-written
-         *     `transcript.json` is a harmless orphan — `GET .../transcript` requires the (absent) artifact row,
-         *     so it is never served.
+         * Pause Zoom Bot
+         * @description Pause the Zoom capture bot bound to an owned session (proxies the control plane).
          */
-        post: operations["finalize-zoom-session"];
+        post: operations["pause-zoom-bot"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/{workspace_id}/sessions/{session_id}/zoom/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resume Zoom Bot
+         * @description Resume the Zoom capture bot bound to an owned session (proxies the control plane).
+         */
+        post: operations["resume-zoom-bot"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/{workspace_id}/zoom/connection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Zoom Connection
+         * @description Whether the calling provider has a Zoom connection. NEVER returns token material.
+         */
+        get: operations["get-zoom-connection"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete Zoom Connection
+         * @description Disconnect Zoom: best-effort revoke at Zoom, delete the row. Idempotent -- deleting a
+         *     non-existent connection still returns 204.
+         */
+        delete: operations["delete-zoom-connection"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/{workspace_id}/zoom/oauth/authorize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start Zoom Oauth
+         * @description Begin the Zoom connect flow: mint a single-use server-held state + PKCE verifier bound to the
+         *     provider/workspace and return the short-lived Zoom authorize URL the browser navigates to.
+         */
+        post: operations["start-zoom-oauth"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/{workspace_id}/zoom/oauth/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Complete Zoom Oauth
+         * @description Unauthenticated Zoom redirect target (NO Bearer -- the single-use state is the credential).
+         *
+         *     Validates + atomically consumes (GETDEL) the state, exchanges the code + PKCE verifier, and stores
+         *     the encrypted tokens. Every failure -- invalid/expired/replayed state, missing code, failed
+         *     exchange -- 302s to the web settings route with an error flag and renders no JSON to the human.
+         *     Opted out of the provider-JWT dependency simply by omitting `claims: ScribeClaimsParam`.
+         */
+        get: operations["complete-zoom-oauth"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/{workspace_id}/zoom/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Zoom Session
+         * @description Run the whole Zoom capture saga server-side and return `{session, bot_id}` (201).
+         *
+         *     In order: validate the meeting link; friendly per-practitioner active-Zoom pre-check; resolve +
+         *     decrypt the STORED Zoom token (409 `zoom_not_connected` if absent); create the session (born
+         *     `in-progress`, `mode=zoom`, `external_id` idempotency); dispatch the bot via the control plane
+         *     with the resolved token. On dispatch failure the session is CANCELLED and any straggler bot reaped
+         *     (503 `bot_dispatch_failed`) so nothing is orphaned. A duplicate/idempotent create whose bot is
+         *     already running recovers that bot instead of dispatching a second one.
+         */
+        post: operations["create-zoom-session"];
         delete?: never;
         options?: never;
         head?: never;
@@ -482,6 +684,25 @@ export interface components {
             summary: components["schemas"]["ArtifactAvailability"];
             transcript: components["schemas"]["ArtifactAvailability"];
         };
+        /** @enum {string} */
+        ArtifactKind: "note" | "summary" | "checklist" | "codes";
+        /**
+         * BotStatusEvent
+         * @description `bot_status` SSE frame payload: the Zoom capture bot's lifecycle state (+ optional reason).
+         *
+         *     `joining -> listening -> paused -> leaving -> done|error`; `reason` carries a machine string on the
+         *     off-happy-path transitions (e.g. `join_timeout`). `done`/`error` are terminal: the event stream
+         *     closes right after relaying one so the client stops reconnecting.
+         */
+        BotStatusEvent: {
+            /** Reason */
+            reason?: string | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "joining" | "waiting_for_host" | "waiting_for_participant" | "playing_disclosure" | "listening" | "paused" | "idle" | "leaving" | "done" | "error";
+        };
         /** ChecklistItemRequest */
         ChecklistItemRequest: {
             /** Id */
@@ -502,6 +723,56 @@ export interface components {
              * @enum {string}
              */
             state: "open" | "checked";
+        };
+        /** ChecklistItemStateResponse */
+        ChecklistItemStateResponse: {
+            /** Evidence */
+            evidence?: string | null;
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /** Source */
+            source?: ("manual" | "auto") | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "open" | "checked";
+            /** Updated At */
+            updated_at?: string | null;
+            /** Updated By */
+            updated_by?: string | null;
+        };
+        /** ChecklistItemToggle */
+        ChecklistItemToggle: {
+            /** Completed */
+            completed: boolean;
+            /** Id */
+            id: string;
+            /**
+             * Source
+             * @default manual
+             * @constant
+             */
+            source: "manual";
+        };
+        /** ChecklistReadResponse */
+        ChecklistReadResponse: {
+            /** Created At */
+            created_at?: string | null;
+            error?: components["schemas"]["ErrorDetail"] | null;
+            generation_status: components["schemas"]["GenerationReadStatus"];
+            /** Items */
+            items?: components["schemas"]["ChecklistItemStateResponse"][] | null;
+            /** Session Id */
+            session_id?: string | null;
+            /** Status */
+            status?: ("open" | "completed" | "archived") | null;
+            /** Title */
+            title?: string | null;
+            /** Updated At */
+            updated_at?: string | null;
         };
         /** ChecklistResponse */
         ChecklistResponse: {
@@ -530,21 +801,93 @@ export interface components {
              */
             updated_at: string;
         };
+        /**
+         * ChecklistStateResponse
+         * @description Response of `PATCH /sessions/{id}/checklist`: the generated checklist with per-item manual
+         *     state + provenance overlaid, and status recomputed from the effective item states.
+         */
+        ChecklistStateResponse: {
+            /** Items */
+            items: components["schemas"]["ChecklistItemStateResponse"][];
+            /**
+             * Session Id
+             * Format: uuid
+             */
+            session_id: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "open" | "completed" | "archived";
+            /** Title */
+            title: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * CodeDecisionRequest
+         * @description Body of `PATCH /sessions/{id}/codes/{suggestion_id}` (V340): the provider's per-suggestion
+         *     decision. Idempotent and re-decidable until finalize.
+         */
+        CodeDecisionRequest: {
+            /**
+             * Decision
+             * @enum {string}
+             */
+            decision: "approved" | "rejected";
+        };
+        /**
+         * CodeDecisionResponse
+         * @description 200 body for a persisted code decision, with when it was decided (who is the caller).
+         */
+        CodeDecisionResponse: {
+            /** Code */
+            code: string;
+            /**
+             * Decided At
+             * Format: date-time
+             */
+            decided_at: string;
+            /**
+             * Decision
+             * @enum {string}
+             */
+            decision: "approved" | "rejected";
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+        };
         /** CodeSuggestionResponse */
         CodeSuggestionResponse: {
             /** Code */
             code: string;
             /** Confidence */
             confidence?: number | null;
+            /** Decision */
+            decision?: ("approved" | "rejected") | null;
             /** Description */
             description: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
             /** Rationale */
             rationale: string;
-            /**
-             * Status
-             * @enum {string}
-             */
-            status: "suggested" | "accepted" | "rejected" | "voided";
+        };
+        /** CodesReadResponse */
+        CodesReadResponse: {
+            error?: components["schemas"]["ErrorDetail"] | null;
+            generation_status: components["schemas"]["GenerationReadStatus"];
+            /** Items */
+            items?: components["schemas"]["CodeSuggestionResponse"][] | null;
+            /** Session Id */
+            session_id?: string | null;
         };
         /** CodesResponse */
         CodesResponse: {
@@ -589,6 +932,18 @@ export interface components {
             details?: components["schemas"]["ErrorDetail"][];
             /** Message */
             message: string;
+        };
+        /**
+         * FinalizeNoteRequest
+         * @description Body of `POST /sessions/{id}/note/finalize` (V340).
+         *
+         *     `base_version` is the note version the provider is finalizing; a stale value returns
+         *     409 version_conflict. Server-side gate validation runs on the *stored* document, not the
+         *     request, so a client cannot bypass required-field gates.
+         */
+        FinalizeNoteRequest: {
+            /** Base Version */
+            base_version: number;
         };
         /** FinalizeNoteResponse */
         FinalizeNoteResponse: {
@@ -635,6 +990,23 @@ export interface components {
             generation: components["schemas"]["GenerationMetadata"];
             summary: components["schemas"]["SummaryResponse"];
         };
+        /**
+         * GenerationEnqueueResponse
+         * @description 202 body for an enqueued (or collapsed-onto-in-flight) generation job.
+         */
+        GenerationEnqueueResponse: {
+            generation: components["schemas"]["GenerationEnvelope"];
+        };
+        /** GenerationEnvelope */
+        GenerationEnvelope: {
+            artifact_kind: components["schemas"]["ArtifactKind"];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            status: components["schemas"]["GenerationStatus"];
+        };
         /** GenerationMetadata */
         GenerationMetadata: {
             /**
@@ -657,10 +1029,42 @@ export interface components {
             /** Prompt Version */
             prompt_version: string;
         };
+        /** @enum {string} */
+        GenerationReadStatus: "ready" | "pending" | "failed";
+        /** @enum {string} */
+        GenerationStatus: "pending" | "succeeded" | "failed";
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /**
+         * NoteReadResponse
+         * @description Reload-safe note poller: artifact fields present only when generation_status == "ready".
+         */
+        NoteReadResponse: {
+            /** Body */
+            body?: string | null;
+            error?: components["schemas"]["ErrorDetail"] | null;
+            /** Generated At */
+            generated_at?: string | null;
+            generation_status: components["schemas"]["GenerationReadStatus"];
+            /** Session Id */
+            session_id?: string | null;
+            /** Signed At */
+            signed_at?: string | null;
+            /** Status */
+            status?: ("draft" | "submitted" | "voided") | null;
+            /** Structured */
+            structured?: {
+                [key: string]: unknown;
+            } | null;
+            /** Type */
+            type?: string | null;
+            /** Updated At */
+            updated_at?: string | null;
+            /** Version */
+            version?: number | null;
         };
         /** NoteResponse */
         NoteResponse: {
@@ -691,6 +1095,8 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+            /** Version */
+            version: number;
         };
         /** SessionListResponse */
         SessionListResponse: {
@@ -738,7 +1144,20 @@ export interface components {
          * SessionStatus
          * @enum {string}
          */
-        SessionStatus: "created" | "in-progress" | "in-review" | "completed" | "cancelled" | "failed";
+        SessionStatus: "in-progress" | "in-review" | "completed" | "cancelled" | "failed";
+        /** SummaryReadResponse */
+        SummaryReadResponse: {
+            error?: components["schemas"]["ErrorDetail"] | null;
+            /** Generated At */
+            generated_at?: string | null;
+            generation_status: components["schemas"]["GenerationReadStatus"];
+            /** Session Id */
+            session_id?: string | null;
+            /** Summary */
+            summary?: string | null;
+            /** Updated At */
+            updated_at?: string | null;
+        };
         /** SummaryResponse */
         SummaryResponse: {
             /**
@@ -759,6 +1178,21 @@ export interface components {
              */
             updated_at: string;
         };
+        /** TicketResponse */
+        TicketResponse: {
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /** Ticket */
+            ticket: string;
+        };
+        /**
+         * TranscriptFinalizedEvent
+         * @description `transcript_finalized` SSE frame payload: emitted once, with no body, when the transcript is done.
+         */
+        TranscriptFinalizedEvent: Record<string, never>;
         /** TranscriptResponse */
         TranscriptResponse: {
             /** Segments */
@@ -779,6 +1213,63 @@ export interface components {
             start_ms: number;
             /** Text */
             text: string;
+        };
+        /**
+         * TranscriptSegmentEvent
+         * @description `transcript_segment` / `interim_transcript` SSE frame payload — one transcript utterance.
+         *
+         *     `transcript_segment` frames are finalized; `interim_transcript` frames are the not-yet-final
+         *     hypothesis for the same `ordinal` (identical shape). Clients dedupe/replace by `ordinal`.
+         */
+        TranscriptSegmentEvent: {
+            /** Ordinal */
+            ordinal: number;
+            /** Speaker */
+            speaker?: string | null;
+            /** Text */
+            text: string;
+            /** Timestamp */
+            timestamp: string;
+        };
+        /**
+         * UpdateChecklistRequest
+         * @description Body of `PATCH /sessions/{id}/checklist` (V340): manual per-item toggles.
+         */
+        UpdateChecklistRequest: {
+            /** Items */
+            items: components["schemas"]["ChecklistItemToggle"][];
+        };
+        /**
+         * UpdateNoteRequest
+         * @description Body of `PUT /sessions/{id}/note` — versioned note autosave (SPEC §6.1 P4).
+         *
+         *     Exactly one of `body` / `structured` is provided per write (a note type is either
+         *     Markdown-bodied or structured; AMD confirmations live inside `structured`). `base_version`
+         *     is the version the client last read; a stale value loses the compare-and-set and returns
+         *     409 version_conflict.
+         */
+        UpdateNoteRequest: {
+            /** Base Version */
+            base_version: number;
+            /** Body */
+            body?: string | null;
+            /** Structured */
+            structured?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /**
+         * UpdateNoteResponse
+         * @description 200 body for a successful `PUT /sessions/{id}/note`: the new version + write time.
+         */
+        UpdateNoteResponse: {
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Version */
+            version: number;
         };
         /**
          * UpdateSessionRequest
@@ -808,6 +1299,127 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
+        };
+        /**
+         * ZoomAuthorizeResponse
+         * @description Response of `POST /zoom/oauth/authorize`.
+         *
+         *     The browser navigates the top-level window to `authorize_url` (it cannot carry
+         *     the in-memory Bearer header on a redirect, so the single-use server-held state
+         *     embedded in the URL is the credential the unauthenticated callback trusts).
+         *     `expires_at` is when that state's short TTL lapses.
+         */
+        ZoomAuthorizeResponse: {
+            /** Authorize Url */
+            authorize_url: string;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+        };
+        /**
+         * ZoomBotControlResponse
+         * @description Response of `POST /sessions/{id}/zoom/pause|resume`: the bot's status after the proxied
+         *     control-plane command. The live status transition also arrives over the event stream (phase 06);
+         *     this is the synchronous ack.
+         */
+        ZoomBotControlResponse: {
+            /** Bot Status */
+            bot_status: string;
+        };
+        /**
+         * ZoomConnectionResponse
+         * @description Response of `GET /zoom/connection`. NEVER carries token material.
+         *
+         *     Deliberately holds only a boolean plus non-sensitive display fields; the
+         *     encrypted access/refresh tokens live only in `scribe.zoom_connections` and are
+         *     resolved server-side (phase 05) to dispatch a bot, never returned to a browser.
+         */
+        ZoomConnectionResponse: {
+            /** Connected */
+            connected: boolean;
+            /** Connected At */
+            connected_at?: string | null;
+            /** Zoom Email */
+            zoom_email?: string | null;
+        };
+        /**
+         * ZoomDisclosureRequest
+         * @description Disclosure config for a Zoom capture bot (SPEC §6.1 P3).
+         *
+         *     `enabled` gates whether the bot plays a recording-disclosure clip on join; `audio_key` names the
+         *     clip when enabled. Passed through server-side to the control plane's bot dispatch — the browser
+         *     never talks to the control plane directly.
+         */
+        ZoomDisclosureRequest: {
+            /** Audio Key */
+            audio_key?: string | null;
+            /** Enabled */
+            enabled: boolean;
+        };
+        /**
+         * ZoomSessionEndResponse
+         * @description Response of `DELETE /sessions/{id}/zoom`: acknowledges that the drain + internal zoom-finalize
+         *     is underway. The session flips to `in-review` asynchronously (reaper backstop).
+         */
+        ZoomSessionEndResponse: {
+            /**
+             * Status
+             * @constant
+             */
+            status: "draining";
+        };
+        /**
+         * ZoomSessionEvent
+         * @description One frame on the `GET /sessions/{id}/events` SSE stream (documents the wire contract for the SDK).
+         *
+         *     Each frame is delivered as `event: <event>\ndata: <json>\n\n`; `ping` carries an empty `{}` body
+         *     and is a keepalive only. The stream is header-authenticated `fetch` streaming (not `EventSource`),
+         *     replays recent events on reconnect via `Last-Event-ID`, and closes after a terminal `bot_status`.
+         */
+        ZoomSessionEvent: {
+            /** Data */
+            data: components["schemas"]["BotStatusEvent"] | components["schemas"]["TranscriptSegmentEvent"] | components["schemas"]["TranscriptFinalizedEvent"] | {
+                [key: string]: unknown;
+            };
+            /**
+             * Event
+             * @enum {string}
+             */
+            event: "bot_status" | "transcript_segment" | "interim_transcript" | "transcript_finalized" | "ping";
+        };
+        /**
+         * ZoomSessionRequest
+         * @description Body of `POST /zoom/sessions` — the whole Zoom capture saga behind one call.
+         *
+         *     The browser hands only a `meeting_link` + disclosure choice (never a `zoomAccessToken`): the
+         *     Scribe API creates the session, resolves the provider's STORED Zoom token, and dispatches the bot
+         *     server-side. `external_id` is the per-attempt idempotency key (same semantics as
+         *     `CreateSessionRequest`).
+         */
+        ZoomSessionRequest: {
+            disclosure: components["schemas"]["ZoomDisclosureRequest"];
+            /** External Appointment Id */
+            external_appointment_id?: string | null;
+            /** External Id */
+            external_id?: string | null;
+            /** Meeting Link */
+            meeting_link: string;
+            /** Metadata */
+            metadata?: {
+                [key: string]: unknown;
+            };
+        };
+        /**
+         * ZoomSessionResponse
+         * @description Response of `POST /zoom/sessions`: the created (`mode=zoom`, `in-progress`) session plus the
+         *     id of the dispatched control-plane bot the live stream is bound to.
+         */
+        ZoomSessionResponse: {
+            /** Bot Id */
+            bot_id: string;
+            session: components["schemas"]["SessionResponse"];
         };
     };
     responses: never;
@@ -1471,7 +2083,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ChecklistResponse"];
+                    "application/json": components["schemas"]["ChecklistReadResponse"];
                 };
             };
             /** @description Bearer token is absent or invalid. */
@@ -1546,13 +2158,22 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Successful Response */
+            /** @description An identical job already succeeded; the checklist is returned. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": components["schemas"]["GeneratedChecklistResponse"];
+                };
+            };
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeneratedChecklistResponse"] | components["schemas"]["GenerationEnqueueResponse"];
                 };
             };
             /** @description Bearer token is absent or invalid. */
@@ -1611,6 +2232,78 @@ export interface operations {
             };
         };
     };
+    "update-session-checklist": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateChecklistRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChecklistStateResponse"];
+                };
+            };
+            /** @description Bearer token is absent or invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The principal is outside this workspace or provider scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No provider-owned resource exists at this URL. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The session is terminal and no longer accepts mutations (`invalid_session_state`). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request validation failed. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     "get-session-codes": {
         parameters: {
             query?: never;
@@ -1629,7 +2322,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CodesResponse"];
+                    "application/json": components["schemas"]["CodesReadResponse"];
                 };
             };
             /** @description Bearer token is absent or invalid. */
@@ -1700,13 +2393,22 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description An identical job already succeeded; the codes are returned. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": components["schemas"]["GeneratedCodesResponse"];
+                };
+            };
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeneratedCodesResponse"] | components["schemas"]["GenerationEnqueueResponse"];
                 };
             };
             /** @description Bearer token is absent or invalid. */
@@ -1756,6 +2458,79 @@ export interface operations {
             };
             /** @description Clinical generation is temporarily unavailable. */
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    "decide-session-code": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                session_id: string;
+                suggestion_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CodeDecisionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CodeDecisionResponse"];
+                };
+            };
+            /** @description Bearer token is absent or invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The principal is outside this workspace or provider scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No provider-owned resource exists at this URL. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The session is terminal and no longer accepts mutations (`invalid_session_state`). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request validation failed. */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1833,6 +2608,68 @@ export interface operations {
             };
         };
     };
+    "stream-zoom-session-events": {
+        parameters: {
+            query?: never;
+            header?: {
+                "Last-Event-ID"?: string | null;
+            };
+            path: {
+                workspace_id: string;
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A live Server-Sent Event stream (header-authenticated `fetch` streaming, not `EventSource`). Emits `bot_status`, `transcript_segment` / `interim_transcript`, and `transcript_finalized` frames plus a `ping` keepalive every 15 s; replays recent events on reconnect via `Last-Event-ID` and closes after a terminal `bot_status`. Each frame is `event: <event>\ndata: <json>\n\n`. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ZoomSessionEvent"];
+                    "text/event-stream": components["schemas"]["ZoomSessionEvent"];
+                };
+            };
+            /** @description Bearer token is absent or invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The principal is outside this workspace or provider scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No live Zoom event stream exists (non-Zoom, unknown, or terminal session). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     "get-session-note": {
         parameters: {
             query?: never;
@@ -1851,7 +2688,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NoteResponse"];
+                    "application/json": components["schemas"]["NoteReadResponse"];
                 };
             };
             /** @description Bearer token is absent or invalid. */
@@ -1910,6 +2747,78 @@ export interface operations {
             };
         };
     };
+    "update-session-note": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateNoteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UpdateNoteResponse"];
+                };
+            };
+            /** @description Bearer token is absent or invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The principal is outside this workspace or provider scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No provider-owned resource exists at this URL. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The base_version is stale (`version_conflict`) or the session is terminal (`invalid_session_state`). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request validation failed. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     "generate-session-note": {
         parameters: {
             query?: never;
@@ -1926,13 +2835,22 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Successful Response */
+            /** @description An identical job already succeeded; the note is returned. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": components["schemas"]["GeneratedNoteResponse"];
+                };
+            };
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeneratedNoteResponse"] | components["schemas"]["GenerationEnqueueResponse"];
                 };
             };
             /** @description Bearer token is absent or invalid. */
@@ -2001,7 +2919,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FinalizeNoteRequest"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -2039,7 +2961,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Generation cannot proceed for the current session state. */
+            /** @description The base_version is stale (`version_conflict`) or the session is terminal and cannot be completed by finalize (`invalid_session_state`). */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -2048,90 +2970,13 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Request validation failed. */
+            /** @description A required AMD/template field is missing on the stored note (`finalize_validation_failed`). */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Clinical generation is temporarily unavailable. */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    "start-session": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                workspace_id: string;
-                session_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SessionResponse"];
-                };
-            };
-            /** @description Bearer token is absent or invalid. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description The principal is outside this workspace or provider scope. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description No provider-owned resource exists at this URL. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description The session is not in a startable state (`invalid_session_state`). */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -2154,7 +2999,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SummaryResponse"];
+                    "application/json": components["schemas"]["SummaryReadResponse"];
                 };
             };
             /** @description Bearer token is absent or invalid. */
@@ -2225,13 +3070,22 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description An identical job already succeeded; the summary is returned. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": components["schemas"]["GeneratedSummaryResponse"];
+                };
+            };
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeneratedSummaryResponse"] | components["schemas"]["GenerationEnqueueResponse"];
                 };
             };
             /** @description Bearer token is absent or invalid. */
@@ -2280,6 +3134,83 @@ export interface operations {
                 };
             };
             /** @description Clinical generation is temporarily unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    "mint-attach-ticket": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TicketResponse"];
+                };
+            };
+            /** @description Bearer token is absent or invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Missing scribe:sessions:write, wrong provider, or identity rejected the subject token. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No provider-owned session exists at this URL. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The session is terminal; no attach ticket can be minted. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Ticket minting is temporarily unavailable; please retry. */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -2367,7 +3298,7 @@ export interface operations {
             };
         };
     };
-    "finalize-zoom-session": {
+    "end-zoom-session": {
         parameters: {
             query?: never;
             header?: never;
@@ -2380,12 +3311,12 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            200: {
+            202: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SessionResponse"];
+                    "application/json": components["schemas"]["ZoomSessionEndResponse"];
                 };
             };
             /** @description Bearer token is absent or invalid. */
@@ -2415,7 +3346,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description The session is not a Zoom session (`not_zoom_session`), is not in a finalizable state (`invalid_session_state`), or its transcript has not been drained yet (`transcript_not_finalized`). */
+            /** @description The session is not a Zoom session (`not_zoom_session`). */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -2431,6 +3362,433 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    "pause-zoom-bot": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ZoomBotControlResponse"];
+                };
+            };
+            /** @description Bearer token is absent or invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The principal is outside this workspace or provider scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No provider-owned resource exists at this URL. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No live Zoom bot is bound to this session (`bot_not_active`). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The control plane failed to deliver the command (`bot_command_failed`). */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    "resume-zoom-bot": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ZoomBotControlResponse"];
+                };
+            };
+            /** @description Bearer token is absent or invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The principal is outside this workspace or provider scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No provider-owned resource exists at this URL. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No live Zoom bot is bound to this session (`bot_not_active`). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The control plane failed to deliver the command (`bot_command_failed`). */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    "get-zoom-connection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ZoomConnectionResponse"];
+                };
+            };
+            /** @description Bearer token is absent or invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The principal is outside this workspace or provider scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    "delete-zoom-connection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bearer token is absent or invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The principal is outside this workspace or provider scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    "start-zoom-oauth": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ZoomAuthorizeResponse"];
+                };
+            };
+            /** @description Bearer token is absent or invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The principal is outside this workspace or provider scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Zoom connect is temporarily unavailable; retry. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    "complete-zoom-oauth": {
+        parameters: {
+            query?: {
+                code?: string;
+                state?: string;
+            };
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Redirect to the web settings route with a `zoom_connected=true` flag on success or a `zoom_error=<reason>` flag on an invalid/expired/replayed state or a failed exchange. */
+            302: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Successful Response */
+            307: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    "create-zoom-session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ZoomSessionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ZoomSessionResponse"];
+                };
+            };
+            /** @description meeting_link is not a valid Zoom meeting URL (`invalid_meeting_link`). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Bearer token is absent or invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The principal is outside this workspace or provider scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The practitioner already has an active Zoom session (`active_zoom_session_exists`), the idempotency key was reused with a different fingerprint (`idempotency_key_conflict`), or the provider has not connected Zoom (`zoom_not_connected`). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Bot dispatch failed; the session was compensated/cancelled (`bot_dispatch_failed`). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };
