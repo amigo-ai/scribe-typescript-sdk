@@ -118,7 +118,10 @@ export class ScribeServerClient {
     this.workspaceId = config.workspaceId
     this.clientId = config.clientId
     this.clientSecret = config.clientSecret
-    this.fetchImpl = resolvedFetch
+    // Bind to globalThis: native `fetch` must run with `this === globalThis` or
+    // it throws "Illegal invocation" when called as `this.fetchImpl(...)` (same
+    // fix as HttpClient). Harmless for an already-bound / arrow `config.fetch`.
+    this.fetchImpl = resolvedFetch.bind(globalThis)
     this.defaultHeaders = config.defaultHeaders ?? {}
   }
 
