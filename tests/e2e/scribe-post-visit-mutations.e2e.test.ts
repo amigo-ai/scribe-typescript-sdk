@@ -5,8 +5,10 @@
  * Env-gated on `SCRIBE_E2E_TOKEN` (a provider JWT obtained via the
  * human-in-the-loop email-OTP flow; ~15-min TTL). The suite **self-skips** when
  * the token is absent — it never mints or hardcodes credentials — so CI / fork
- * PRs without a token stay green. Base URL defaults to
- * `https://scribe-staging.platform.amigo.ai` (override with `SCRIBE_E2E_BASE_URL`).
+ * PRs without a token stay green. The CI workflow supplies the host URLs via
+ * `env:` (repo variables with staging defaults); locally they fall back to
+ * `SCRIBE_E2E_BASE_URL` → `https://scribe-staging.platform.amigo.ai` and the
+ * identity/OTP host `SCRIBE_E2E_IDENTITY_BASE_URL` → `https://api-staging.platform.amigo.ai`.
  *
  * Covered contract (SPEC §6.1 P4, phase 08):
  *   instantiate `ScribeClient` with an ASYNC token provider

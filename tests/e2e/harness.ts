@@ -64,12 +64,20 @@ if (!hasCreds) {
 // token is short-lived ~15 min). It NEVER mints or hardcodes credentials, and
 // self-skips (does not fail) when `SCRIBE_E2E_TOKEN` is absent.
 // ---------------------------------------------------------------------------
+// Host URLs are supplied by the CI workflow's `env:` block (repository
+// variables with staging defaults) and read here from `process.env`; the
+// literals below are only a local-run fallback. NOTE: the identity (OTP/token)
+// host is `api-staging`, NOT `identity-staging`.
 export const tokenEnv = {
-  /** Scribe CRUD base URL (defaults to staging per the phase-10 spec). */
+  /** Scribe CRUD base URL (from `SCRIBE_E2E_BASE_URL`; staging fallback). */
   baseUrl: process.env.SCRIBE_E2E_BASE_URL ?? 'https://scribe-staging.platform.amigo.ai',
-  /** Identity base URL (defaults to staging; informational — the token is pre-minted). */
+  /**
+   * Identity `/token` base URL (from `SCRIBE_E2E_IDENTITY_BASE_URL`; staging
+   * fallback). Informational for the token suite — the JWT is pre-minted — but
+   * kept correct (`api-staging`) for the OTP flow that produces it.
+   */
   identityBaseUrl:
-    process.env.SCRIBE_E2E_IDENTITY_BASE_URL ?? 'https://identity-staging.platform.amigo.ai',
+    process.env.SCRIBE_E2E_IDENTITY_BASE_URL ?? 'https://api-staging.platform.amigo.ai',
   /** Pre-minted provider JWT (aud=api.platform, carries `workspace_id`). */
   token: process.env.SCRIBE_E2E_TOKEN,
   /** Workspace id; falls back to the token's `workspace_id` claim when unset. */

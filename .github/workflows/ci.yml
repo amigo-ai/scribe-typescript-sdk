@@ -77,13 +77,19 @@ jobs:
 
       - name: Run E2E tests (staging)
         env:
-          # Non-sensitive config lives in repository *variables*; only the M2M
-          # client id/secret are *secrets*.
-          SCRIBE_E2E_BASE_URL: ${{ vars.SCRIBE_E2E_BASE_URL }}
-          SCRIBE_E2E_IDENTITY_BASE_URL: ${{ vars.SCRIBE_E2E_IDENTITY_BASE_URL }}
+          # Non-sensitive hostnames come from repository *variables*, each with a
+          # staging default so the correct host is used even if the variable is
+          # unset/misconfigured (overridable per environment). NOTE: the identity
+          # (OTP/token) host is `api-staging`, NOT `identity-staging`.
+          SCRIBE_E2E_BASE_URL: ${{ vars.SCRIBE_E2E_BASE_URL || 'https://scribe-staging.platform.amigo.ai' }}
+          SCRIBE_E2E_IDENTITY_BASE_URL: ${{ vars.SCRIBE_E2E_IDENTITY_BASE_URL || 'https://api-staging.platform.amigo.ai' }}
+          # M2M-suite credentials (secrets).
           SCRIBE_E2E_WORKSPACE_ID: ${{ secrets.SCRIBE_E2E_WORKSPACE_ID }}
           SCRIBE_E2E_PROVIDER_EMAIL: ${{ secrets.SCRIBE_E2E_PROVIDER_EMAIL }}
           SCRIBE_M2M_CLIENT_ID: ${{ secrets.SCRIBE_M2M_CLIENT_ID }}
           SCRIBE_M2M_CLIENT_SECRET: ${{ secrets.SCRIBE_M2M_CLIENT_SECRET }}
+          # GA post-visit-mutation suite: a short-lived provider JWT (OTP-minted,
+          # out-of-band). When absent the token suite self-skips cleanly.
+          SCRIBE_E2E_TOKEN: ${{ secrets.SCRIBE_E2E_TOKEN }}
         # verbose so the log names each suite that actually ran (vs. skipped).
         run: npm run test:e2e -- --reporter=verbose
