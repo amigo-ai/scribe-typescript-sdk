@@ -82,6 +82,31 @@ describe('parseZoomSessionEvent', () => {
   it('rejects a malformed JSON data payload', () => {
     expect(parseZoomSessionEvent({ event: 'bot_status', data: '{not json' })).toBeNull()
   })
+
+  it('rejects a bot_status frame with an unknown/invalid state', () => {
+    expect(parseZoomSessionEvent({ event: 'bot_status', data: '{"state":"nope"}' })).toBeNull()
+    expect(parseZoomSessionEvent({ event: 'bot_status', data: '{"state":123}' })).toBeNull()
+  })
+
+  it('rejects a transcript frame missing required fields', () => {
+    // missing text + timestamp
+    expect(parseZoomSessionEvent({ event: 'transcript_segment', data: '{"ordinal":1}' })).toBeNull()
+    // ordinal wrong type
+    expect(
+      parseZoomSessionEvent({
+        event: 'transcript_segment',
+        data: '{"ordinal":"1","text":"hi","timestamp":"0"}',
+      })
+    ).toBeNull()
+  })
+
+  it('accepts a well-formed transcript frame', () => {
+    const ev = parseZoomSessionEvent({
+      event: 'transcript_segment',
+      data: '{"ordinal":2,"text":"hello","timestamp":"12","speaker":"clinician"}',
+    })
+    expect(ev?.event).toBe('transcript_segment')
+  })
 })
 
 describe('streamSessionEvents', () => {
@@ -152,6 +177,80 @@ describe('streamSessionEvents', () => {
       )
     ).rejects.toBeInstanceOf(NotFoundError)
     expect(calls).toHaveLength(1)
+  })
+
+  it('binds fetch to globalThis (no Illegal invocation for native-like fetch)', async () => {
+    const nativeLike = function (this: unknown) {
+      if (this !== globalThis) {
+        throw new TypeError("Failed to execute 'fetch' on 'Window': Illegal invocation")
+      }
+      return Promise.resolve(sseResponse(['event: bot_status\ndata: {"state":"done"}\n\n']))
+    } as unknown as FetchLike
+    const events = await collect(
+      streamSessionEvents({
+        baseUrl: BASE,
+        workspaceId: WS,
+        sessionId: SID,
+        token: 't',
+        fetch: nativeLike,
+      })
+    )
+    expect(events.map(e => e.event)).toEqual(['bot_status'])
+  })
+
+  it('honors the retry budget on a body that errors with no events (no unbounded loop)', async () => {
+    // A 200 whose body immediately errors, repeatedly. With maxRetries=0 the
+    // stream must throw after the first failed read — never tight-loop.
+    let calls = 0
+    const erroringBody: FetchLike = () => {
+      calls += 1
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.error(new Error('body boom'))
+        },
+      })
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        statusText: '',
+        headers: new Headers(),
+        body: stream,
+        text: () => Promise.resolve(''),
+      } as unknown as Response)
+    }
+    await expect(
+      collect(
+        streamSessionEvents({
+          baseUrl: BASE,
+          workspaceId: WS,
+          sessionId: SID,
+          token: 't',
+          fetch: erroringBody,
+          maxRetries: 0,
+        })
+      )
+    ).rejects.toBeTruthy()
+    expect(calls).toBe(1)
+  })
+
+  it('returns (no throw) on a clean EOF with no events when the budget is exhausted', async () => {
+    let calls = 0
+    const emptyThenClose: FetchLike = () => {
+      calls += 1
+      return Promise.resolve(sseResponse([])) // immediate clean EOF, zero frames
+    }
+    const events = await collect(
+      streamSessionEvents({
+        baseUrl: BASE,
+        workspaceId: WS,
+        sessionId: SID,
+        token: 't',
+        fetch: emptyThenClose,
+        maxRetries: 0,
+      })
+    )
+    expect(events).toEqual([])
+    expect(calls).toBe(1)
   })
 
   it('stops when the caller aborts', async () => {

@@ -250,11 +250,19 @@ export function isGenerationEnqueued(
   result: GenerationEnqueueResponse | { generation?: unknown } | Record<string, unknown>
 ): result is GenerationEnqueueResponse {
   const gen = (result as { generation?: unknown }).generation
+  if (typeof gen !== 'object' || gen === null) {
+    return false
+  }
+  const g = gen as Record<string, unknown>
   return (
-    typeof gen === 'object' &&
-    gen !== null &&
-    'status' in (gen as Record<string, unknown>) &&
-    'artifact_kind' in (gen as Record<string, unknown>)
+    typeof g.id === 'string' &&
+    typeof g.status === 'string' &&
+    (g.status === 'pending' || g.status === 'succeeded' || g.status === 'failed') &&
+    typeof g.artifact_kind === 'string' &&
+    (g.artifact_kind === 'note' ||
+      g.artifact_kind === 'summary' ||
+      g.artifact_kind === 'checklist' ||
+      g.artifact_kind === 'codes')
   )
 }
 

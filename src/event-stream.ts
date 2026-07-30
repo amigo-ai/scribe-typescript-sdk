@@ -40,6 +40,20 @@ const EVENT_TYPES = new Set<ZoomSessionEventType>([
 /** Terminal `bot_status.state` values after which the server closes the stream. */
 const TERMINAL_BOT_STATES = new Set(['done', 'error'])
 
+/** Valid `bot_status.state` values (mirrors the `BotStatusEvent` schema enum). */
+const BOT_STATES = new Set([
+  'joining',
+  'waiting_for_host',
+  'waiting_for_participant',
+  'playing_disclosure',
+  'listening',
+  'paused',
+  'idle',
+  'leaving',
+  'done',
+  'error',
+])
+
 export interface StreamSessionEventsOptions {
   /** Base URL of the Scribe API, e.g. `https://scribe.platform.amigo.ai`. */
   baseUrl: string
@@ -108,6 +122,31 @@ export function parseZoomSessionEvent(frame: RawSseFrame): ZoomSessionEvent | nu
   if (typeof data !== 'object' || data === null) {
     return null
   }
+  // Event-specific structural validation — the wire is untrusted, so a frame
+  // whose payload doesn't match its declared `event` is dropped (returns null)
+  // rather than yielded as a mistyped `ZoomSessionEvent`.
+  const record = data as Record<string, unknown>
+  if (event === 'bot_status') {
+    if (typeof record.state !== 'string' || !BOT_STATES.has(record.state)) {
+      return null
+    }
+    if (record.reason != null && typeof record.reason !== 'string') {
+      return null
+    }
+  } else if (event === 'transcript_segment' || event === 'interim_transcript') {
+    if (
+      typeof record.ordinal !== 'number' ||
+      typeof record.text !== 'string' ||
+      typeof record.timestamp !== 'string'
+    ) {
+      return null
+    }
+    if (record.speaker != null && typeof record.speaker !== 'string') {
+      return null
+    }
+  }
+  // `transcript_finalized` / `ping` carry an empty (or open) object — no fields
+  // to validate beyond it being an object.
   return { event: event as ZoomSessionEventType, data } as ZoomSessionEvent
 }
 
@@ -147,10 +186,19 @@ function delay(ms: number, signal?: AbortSignal): Promise<void> {
  */
 function drainFrames(buffer: string): { frames: RawSseFrame[]; rest: string } {
   const frames: RawSseFrame[] = []
-  // Normalize CRLF so a `\r\n\r\n` boundary splits the same as `\n\n`.
-  const normalized = buffer.replace(/\r\n/g, '\n')
+  // Hold back a trailing '\r' — it may be the first half of a CRLF split across
+  // chunk boundaries; converting it now could fabricate a false frame boundary.
+  let working = buffer
+  let heldCr = ''
+  if (working.endsWith('\r')) {
+    heldCr = '\r'
+    working = working.slice(0, -1)
+  }
+  // Normalize all three SSE line terminators (`\r\n`, `\n`, bare `\r`). CRLF
+  // first so it collapses to a single `\n` rather than a blank line.
+  const normalized = working.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
   const parts = normalized.split('\n\n')
-  const rest = parts.pop() ?? ''
+  const rest = (parts.pop() ?? '') + heldCr
   for (const block of parts) {
     if (!block.trim()) {
       continue
@@ -194,10 +242,14 @@ function drainFrames(buffer: string): { frames: RawSseFrame[]; rest: string } {
 export async function* streamSessionEvents(
   options: StreamSessionEventsOptions
 ): AsyncGenerator<ZoomSessionEvent, void, unknown> {
-  const fetchImpl = options.fetch ?? globalThis.fetch
-  if (typeof fetchImpl !== 'function') {
+  const resolvedFetch = options.fetch ?? globalThis.fetch
+  if (typeof resolvedFetch !== 'function') {
     throw new Error('No fetch implementation available; pass options.fetch')
   }
+  // Bind to globalThis: native `fetch` throws "Illegal invocation" if invoked
+  // as a bare reference in browsers (same fix as HttpClient). Harmless for an
+  // already-bound / arrow `options.fetch`.
+  const fetchImpl = resolvedFetch.bind(globalThis)
   const base = stripTrailingSlashes(options.baseUrl)
   const url = `${base}/v1/${encodeURIComponent(options.workspaceId)}/sessions/${encodeURIComponent(
     options.sessionId
@@ -213,7 +265,10 @@ export async function* streamSessionEvents(
       Authorization: `Bearer ${token}`,
       ...options.defaultHeaders,
     }
-    if (lastEventId !== undefined) {
+    // Omit the header when the last id is unset OR empty: SSE uses an empty id
+    // to RESET resume state, after which no cursor should be sent (some servers
+    // reject a present-but-empty `Last-Event-ID`).
+    if (lastEventId) {
       headers['Last-Event-ID'] = lastEventId
     }
 
@@ -253,26 +308,26 @@ export async function* streamSessionEvents(
       throw new NetworkError('Event stream response had no body', undefined, { url, method: 'GET' })
     }
 
-    // A successful connect resets the reconnect backoff.
-    attempt = 0
     const reader = body.getReader()
     const decoder = new TextDecoder()
     let buffer = ''
-    let closedCleanly = false
     let terminal = false
+    let hadError = false
+    let readError: unknown
+    let yielded = 0
 
     try {
       for (;;) {
         const { value, done } = await reader.read()
         if (done) {
-          closedCleanly = true
-          break
+          break // clean EOF (non-terminal) — fall through to the retry gate
         }
         buffer += decoder.decode(value, { stream: true })
         const { frames, rest } = drainFrames(buffer)
         buffer = rest
         for (const raw of frames) {
-          if (raw.id !== undefined) {
+          // Track resume position; ignore ids containing NUL (per SSE parsing).
+          if (raw.id !== undefined && !raw.id.includes('\u0000')) {
             lastEventId = raw.id
           }
           const parsed = parseZoomSessionEvent(raw)
@@ -280,6 +335,7 @@ export async function* streamSessionEvents(
             continue
           }
           yield parsed
+          yielded += 1
           if (isTerminal(parsed)) {
             terminal = true
             break
@@ -293,13 +349,8 @@ export async function* streamSessionEvents(
       if (options.signal?.aborted) {
         return
       }
-      if (attempt >= maxRetries) {
-        throw new NetworkError(
-          `Event stream read failed: ${err instanceof Error ? err.message : String(err)}`,
-          err instanceof Error ? err : new Error(String(err)),
-          { url, method: 'GET' }
-        )
-      }
+      hadError = true
+      readError = err
     } finally {
       await reader.cancel().catch(() => {})
     }
@@ -307,14 +358,26 @@ export async function* streamSessionEvents(
     if (terminal || options.signal?.aborted) {
       return
     }
-    // Stream dropped before a terminal frame — reconnect (resuming from
-    // `Last-Event-ID`) with backoff, unless we've exhausted the budget.
-    if (closedCleanly) {
-      if (attempt >= maxRetries) {
-        return
-      }
-      await delay(backoffDelayMs(attempt), options.signal)
-      attempt += 1
+
+    // Single retry gate for EVERY non-terminal exit (clean EOF or read error).
+    // A connection that delivered ≥1 event counts as progress and resets the
+    // backoff; one that produced nothing (e.g. the server accepts then
+    // immediately errors the body) keeps consuming the retry budget, so the loop
+    // can never spin unbounded and `maxRetries` is always honored.
+    if (yielded > 0) {
+      attempt = 0
     }
+    if (attempt >= maxRetries) {
+      if (hadError) {
+        throw new NetworkError(
+          `Event stream read failed: ${readError instanceof Error ? readError.message : String(readError)}`,
+          readError instanceof Error ? readError : new Error(String(readError)),
+          { url, method: 'GET' }
+        )
+      }
+      return
+    }
+    await delay(backoffDelayMs(attempt), options.signal)
+    attempt += 1
   }
 }
