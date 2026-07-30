@@ -76,6 +76,20 @@ async function resolveToken(token: TokenProvider): Promise<string> {
 }
 
 /**
+ * Strip trailing `/` from a base URL. A linear scan rather than a
+ * `replace(/\/+$/, '')` regex, whose unbounded `+` before `$` is a
+ * polynomial-ReDoS shape (flagged by CodeQL `js/polynomial-redos`) on inputs
+ * with long runs of slashes.
+ */
+function stripTrailingSlashes(input: string): string {
+  let end = input.length
+  while (end > 0 && input.charCodeAt(end - 1) === 47 /* '/' */) {
+    end -= 1
+  }
+  return input.slice(0, end)
+}
+
+/**
  * Validate a raw SSE frame into a typed {@link ZoomSessionEvent}, or `null` if
  * the frame is malformed / an unknown event (the wire is untrusted). `ping`
  * keepalives carry an empty `{}` body.
@@ -184,7 +198,7 @@ export async function* streamSessionEvents(
   if (typeof fetchImpl !== 'function') {
     throw new Error('No fetch implementation available; pass options.fetch')
   }
-  const base = options.baseUrl.replace(/\/+$/, '')
+  const base = stripTrailingSlashes(options.baseUrl)
   const url = `${base}/v1/${encodeURIComponent(options.workspaceId)}/sessions/${encodeURIComponent(
     options.sessionId
   )}/events`
