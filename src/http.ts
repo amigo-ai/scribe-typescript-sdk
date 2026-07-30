@@ -61,14 +61,18 @@ export function combineAbortSignal(
   // late timer from mislabeling a caller-abort as a timeout, and disarms the
   // timer the moment the caller aborts.
   let winner: 'timeout' | 'abort' | null = null
-  let timer: ReturnType<typeof setTimeout> | undefined
+  // Call timers via `globalThis.` so the receiver is globalThis — a bare
+  // `setTimeout`/`clearTimeout` reference throws "Illegal invocation" in
+  // browsers (same class as the `fetch` bug). The property-access form is also
+  // fake-timer safe (vitest patches `globalThis.setTimeout`).
+  let timer: ReturnType<typeof globalThis.setTimeout> | undefined
   const onAbort = () => {
     if (winner) {
       return
     }
     winner = 'abort'
     if (timer !== undefined) {
-      clearTimeout(timer)
+      globalThis.clearTimeout(timer)
     }
     controller.abort((signal as AbortSignal).reason)
   }
@@ -83,12 +87,12 @@ export function combineAbortSignal(
     winner = 'abort'
     controller.abort(signal.reason)
   } else {
-    timer = setTimeout(onTimeout, timeoutMs)
+    timer = globalThis.setTimeout(onTimeout, timeoutMs)
     signal?.addEventListener('abort', onAbort, { once: true })
   }
   const cleanup = () => {
     if (timer !== undefined) {
-      clearTimeout(timer)
+      globalThis.clearTimeout(timer)
     }
     signal?.removeEventListener('abort', onAbort)
   }

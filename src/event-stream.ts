@@ -166,12 +166,15 @@ function delay(ms: number, signal?: AbortSignal): Promise<void> {
       resolve()
       return
     }
-    const timer = setTimeout(() => {
+    // Call timers via `globalThis.` so the receiver is globalThis: a bare
+    // `setTimeout(...)` reference throws "Illegal invocation" in browsers (same
+    // class as the `fetch` bug). Property-access form also stays fake-timer safe.
+    const timer = globalThis.setTimeout(() => {
       signal?.removeEventListener('abort', onAbort)
       resolve()
     }, ms)
     const onAbort = () => {
-      clearTimeout(timer)
+      globalThis.clearTimeout(timer)
       resolve()
     }
     signal?.addEventListener('abort', onAbort, { once: true })

@@ -447,7 +447,10 @@ export class ScribeStreamClient {
     this.setState('reconnecting')
     const delay = this.delayFor(this.attempt)
     this.attempt += 1
-    this.reconnectTimer = setTimeout(() => {
+    // Call timers via `globalThis.` so the receiver is globalThis — a bare
+    // reference throws "Illegal invocation" in browsers (same class as the
+    // `fetch` bug); property-access form is also fake-timer safe.
+    this.reconnectTimer = globalThis.setTimeout(() => {
       this.reconnectTimer = null
       void this.openSocket(this.ring.ackedBytes, true).catch(error => {
         // A re-allocate / re-ticket failure: back off and retry until the
@@ -476,14 +479,14 @@ export class ScribeStreamClient {
     this.stopKeepalive()
     // Browser WebSocket has no ping() — send a JSON {type:"ping"} text frame to
     // reset the ALB/Envoy idle timers on the browser↔worker leg.
-    this.keepaliveTimer = setInterval(() => {
+    this.keepaliveTimer = globalThis.setInterval(() => {
       this.sendControl(CLIENT_FRAME.ping)
     }, this.keepaliveMs)
   }
 
   private stopKeepalive(): void {
     if (this.keepaliveTimer !== null) {
-      clearInterval(this.keepaliveTimer)
+      globalThis.clearInterval(this.keepaliveTimer)
       this.keepaliveTimer = null
     }
   }
@@ -491,7 +494,7 @@ export class ScribeStreamClient {
   private clearTimers(): void {
     this.stopKeepalive()
     if (this.reconnectTimer !== null) {
-      clearTimeout(this.reconnectTimer)
+      globalThis.clearTimeout(this.reconnectTimer)
       this.reconnectTimer = null
     }
   }
