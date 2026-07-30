@@ -197,3 +197,183 @@ export type CodesResponse = Schemas['CodesResponse']
 
 /** Response from generate-codes (`GeneratedCodesResponse`) — the codes plus their generation metadata. */
 export type GeneratedCodesResponse = Schemas['GeneratedCodesResponse']
+
+// ---------------------------------------------------------------------------
+// Phase 02–08 additions (GA 0.4.0). Aliases of the generated schemas for the
+// attach-ticket, Zoom saga/controls/events/OAuth, versioned note write /
+// finalize, code decisions, and checklist toggle endpoints — plus the
+// reload-safe `*ReadResponse` artifact-poller shapes (carry `generation_status`
+// and, for the note, `version`) and the async-generation `202` envelope.
+// ---------------------------------------------------------------------------
+
+/* --- Async generation (phase 07) --- */
+
+/** Terminal-or-pending status of a single generation job (`pending`/`succeeded`/`failed`). */
+export type GenerationStatus = Schemas['GenerationStatus']
+
+/** Read-time generation status of an artifact (`ready`/`pending`/`failed`). */
+export type GenerationReadStatus = Schemas['GenerationReadStatus']
+
+/** Which artifact a generation job produces (`ArtifactKind`). */
+export type ArtifactKind = Schemas['ArtifactKind']
+
+/** Handle to an enqueued (or collapsed-onto-in-flight) generation job (`GenerationEnvelope`). */
+export type GenerationEnvelope = Schemas['GenerationEnvelope']
+
+/**
+ * `202` body from a `generate*` call: the async job was enqueued (or collapsed
+ * onto an in-flight one) rather than produced synchronously. Carries the
+ * {@link GenerationEnvelope} to poll the corresponding `get*` read shape.
+ */
+export type GenerationEnqueueResponse = Schemas['GenerationEnqueueResponse']
+
+/** Structured error detail (`ErrorDetail`) attached to a read-shape's `error`. */
+export type ErrorDetail = Schemas['ErrorDetail']
+
+/**
+ * Union return of `generate*` (phase 07): the service either produces the
+ * artifact synchronously (`200`, `Generated*Response`) or enqueues an async job
+ * (`202`, {@link GenerationEnqueueResponse}). Discriminate with
+ * {@link isGenerationEnqueued}.
+ */
+export type NoteGenerationResult = GeneratedNoteResponse | GenerationEnqueueResponse
+export type SummaryGenerationResult = GeneratedSummaryResponse | GenerationEnqueueResponse
+export type ChecklistGenerationResult = GeneratedChecklistResponse | GenerationEnqueueResponse
+export type CodesGenerationResult = GeneratedCodesResponse | GenerationEnqueueResponse
+
+/**
+ * Narrow a `generate*` result to the async-enqueue (`202`) branch. When `true`,
+ * `result.generation` is the {@link GenerationEnvelope}; otherwise the artifact
+ * was produced synchronously.
+ */
+export function isGenerationEnqueued(
+  result: GenerationEnqueueResponse | { generation?: unknown } | Record<string, unknown>
+): result is GenerationEnqueueResponse {
+  const gen = (result as { generation?: unknown }).generation
+  if (typeof gen !== 'object' || gen === null) {
+    return false
+  }
+  const g = gen as Record<string, unknown>
+  return (
+    typeof g.id === 'string' &&
+    typeof g.status === 'string' &&
+    (g.status === 'pending' || g.status === 'succeeded' || g.status === 'failed') &&
+    typeof g.artifact_kind === 'string' &&
+    (g.artifact_kind === 'note' ||
+      g.artifact_kind === 'summary' ||
+      g.artifact_kind === 'checklist' ||
+      g.artifact_kind === 'codes')
+  )
+}
+
+/* --- Reload-safe artifact read shapes (phases 07/08) --- */
+
+/**
+ * Reload-safe note poller (`NoteReadResponse`). Artifact fields (`body`,
+ * `structured`, `version`, …) are present only when
+ * `generation_status === 'ready'`; while `pending` the poller returns the status
+ * with null artifact fields, and `failed` carries an {@link ErrorDetail}. Note
+ * the persisted `version` (used as the `base_version` for
+ * {@link ScribeClient.putNote} / {@link ScribeClient.finalizeNote}).
+ */
+export type NoteReadResponse = Schemas['NoteReadResponse']
+
+/** Reload-safe summary poller (`SummaryReadResponse`) — carries `generation_status`. */
+export type SummaryReadResponse = Schemas['SummaryReadResponse']
+
+/** Reload-safe checklist poller (`ChecklistReadResponse`) — carries `generation_status`. */
+export type ChecklistReadResponse = Schemas['ChecklistReadResponse']
+
+/** Reload-safe codes poller (`CodesReadResponse`) — carries `generation_status`. */
+export type CodesReadResponse = Schemas['CodesReadResponse']
+
+/** A checklist item with manual-state + provenance overlaid (`ChecklistItemStateResponse`). */
+export type ChecklistItemStateResponse = Schemas['ChecklistItemStateResponse']
+
+/* --- Attach ticket (phase 02) --- */
+
+/**
+ * Response from {@link ScribeClient.mintTicket} (`TicketResponse`) — a WS-only,
+ * session-bound attach ticket (`aud=scribe-streaming`, ~5-min TTL) and its
+ * `expires_at`. This is the only credential that ever reaches the browser.
+ */
+export type TicketResponse = Schemas['TicketResponse']
+
+/* --- Versioned note write / finalize (phase 08) --- */
+
+/**
+ * Request body for {@link ScribeClient.putNote} (`UpdateNoteRequest`) — a
+ * versioned autosave. Provide exactly one of `body` / `structured` per write and
+ * the `base_version` the client last read; a stale `base_version` loses the
+ * compare-and-set and returns `409 version_conflict`.
+ */
+export type UpdateNoteRequest = Schemas['UpdateNoteRequest']
+
+/** Response from {@link ScribeClient.putNote} (`UpdateNoteResponse`) — the new `version` + `updated_at`. */
+export type UpdateNoteResponse = Schemas['UpdateNoteResponse']
+
+/**
+ * Request body for {@link ScribeClient.finalizeNote} (`FinalizeNoteRequest`) —
+ * the `base_version` being finalized; a stale value returns `409
+ * version_conflict`.
+ */
+export type FinalizeNoteRequest = Schemas['FinalizeNoteRequest']
+
+/* --- Code decisions (phase 08) --- */
+
+/** Request body for {@link ScribeClient.patchCode} (`CodeDecisionRequest`) — `approved` / `rejected`. */
+export type CodeDecisionRequest = Schemas['CodeDecisionRequest']
+
+/** Response from {@link ScribeClient.patchCode} (`CodeDecisionResponse`) — the persisted decision. */
+export type CodeDecisionResponse = Schemas['CodeDecisionResponse']
+
+/* --- Checklist toggles (phase 08) --- */
+
+/** A single manual checklist toggle (`ChecklistItemToggle`). */
+export type ChecklistItemToggle = Schemas['ChecklistItemToggle']
+
+/** Request body for {@link ScribeClient.patchChecklist} (`UpdateChecklistRequest`) — `items` (manual toggles). */
+export type UpdateChecklistRequest = Schemas['UpdateChecklistRequest']
+
+/** Response from {@link ScribeClient.patchChecklist} (`ChecklistStateResponse`) — the checklist with per-item state + provenance. */
+export type ChecklistStateResponse = Schemas['ChecklistStateResponse']
+
+/* --- Zoom saga / controls / OAuth (phases 04/05) --- */
+
+/** Disclosure config for a Zoom capture bot (`ZoomDisclosureRequest`). */
+export type ZoomDisclosureRequest = Schemas['ZoomDisclosureRequest']
+
+/** Request body for {@link ScribeClient.createZoomSession} (`ZoomSessionRequest`). */
+export type ZoomSessionRequest = Schemas['ZoomSessionRequest']
+
+/** Response from {@link ScribeClient.createZoomSession} (`ZoomSessionResponse`) — the created session + dispatched `bot_id`. */
+export type ZoomSessionResponse = Schemas['ZoomSessionResponse']
+
+/** Response from {@link ScribeClient.pauseZoom} / {@link ScribeClient.resumeZoom} (`ZoomBotControlResponse`) — the bot's `bot_status`. */
+export type ZoomBotControlResponse = Schemas['ZoomBotControlResponse']
+
+/** Response from {@link ScribeClient.endZoom} (`ZoomSessionEndResponse`) — acknowledges the drain (`status: 'draining'`). */
+export type ZoomSessionEndResponse = Schemas['ZoomSessionEndResponse']
+
+/** Response from {@link ScribeClient.getZoomConnection} (`ZoomConnectionResponse`) — connection status only; never token material. */
+export type ZoomConnectionResponse = Schemas['ZoomConnectionResponse']
+
+/** Response from {@link ScribeClient.authorizeZoomOAuth} (`ZoomAuthorizeResponse`) — the `authorize_url` to navigate to. */
+export type ZoomAuthorizeResponse = Schemas['ZoomAuthorizeResponse']
+
+/* --- Zoom event stream (phase 06) --- */
+
+/** One frame on the `GET /sessions/{id}/events` SSE stream (`ZoomSessionEvent`). */
+export type ZoomSessionEvent = Schemas['ZoomSessionEvent']
+
+/** The `event` discriminator of a {@link ZoomSessionEvent}. */
+export type ZoomSessionEventType = ZoomSessionEvent['event']
+
+/** `bot_status` SSE frame payload (`BotStatusEvent`) — the capture bot's lifecycle state. */
+export type BotStatusEvent = Schemas['BotStatusEvent']
+
+/** `transcript_segment` / `interim_transcript` SSE frame payload (`TranscriptSegmentEvent`). */
+export type TranscriptSegmentEvent = Schemas['TranscriptSegmentEvent']
+
+/** `transcript_finalized` SSE frame payload (`TranscriptFinalizedEvent`) — emitted once, empty body. */
+export type TranscriptFinalizedEvent = Schemas['TranscriptFinalizedEvent']

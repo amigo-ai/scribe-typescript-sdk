@@ -311,25 +311,42 @@ describe('generateNote', () => {
 })
 
 describe('finalizeNote', () => {
-  it('POSTs to the finalize path with no body and returns the finalized note', async () => {
-    const finalized = { note: { session_id: 'sess-1', status: 'signed', body: 'x' } }
+  it('POSTs the base_version body to the finalize path and returns the finalized note', async () => {
+    const finalized = { note: { session_id: 'sess-1', status: 'submitted', body: 'x', version: 3 } }
     const { fetch, calls } = mockFetch([{ status: 200, body: finalized }])
-    const result = await client(fetch).finalizeNote('sess-1')
+    const result = await client(fetch).finalizeNote('sess-1', { base_version: 3 })
 
     expect(result).toEqual(finalized)
     expect(calls[0]!.url).toBe(`${BASE}/v1/${WS}/sessions/sess-1/note/finalize`)
     expect(calls[0]!.init?.method).toBe('POST')
-    expect(calls[0]!.init?.body).toBeUndefined()
+    const headers = calls[0]!.init?.headers as Record<string, string>
+    expect(headers['Content-Type']).toBe('application/json')
+    expect(JSON.parse(String(calls[0]!.init?.body))).toEqual({ base_version: 3 })
+  })
+
+  it('maps a stale base_version 409 to ConflictError (version_conflict)', async () => {
+    const { fetch } = mockFetch([
+      { status: 409, body: { code: 'version_conflict', message: 'stale' } },
+    ])
+    const err = await client(fetch)
+      .finalizeNote('sess-1', { base_version: 1 })
+      .catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(ConflictError)
+    expect((err as ConflictError).errorCode).toBe('version_conflict')
   })
 
   it('maps 404 (no note to finalize) to NotFoundError', async () => {
     const { fetch } = mockFetch([{ status: 404, body: { message: 'no note' } }])
-    await expect(client(fetch).finalizeNote('sess-1')).rejects.toBeInstanceOf(NotFoundError)
+    await expect(client(fetch).finalizeNote('sess-1', { base_version: 1 })).rejects.toBeInstanceOf(
+      NotFoundError
+    )
   })
 
   it('requires a sessionId', async () => {
     const { fetch } = mockFetch([{}])
-    await expect(client(fetch).finalizeNote('')).rejects.toBeInstanceOf(ConfigurationError)
+    await expect(client(fetch).finalizeNote('', { base_version: 1 })).rejects.toBeInstanceOf(
+      ConfigurationError
+    )
   })
 })
 

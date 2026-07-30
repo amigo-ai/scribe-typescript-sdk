@@ -23,6 +23,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import {
   AuthenticationError,
+  isGenerationEnqueued,
   isScribeError,
   NotFoundError,
   ScribeClient,
@@ -30,12 +31,12 @@ import {
   ServiceUnavailableError,
 } from '../../src'
 import type {
-  ChecklistResponse,
-  CodesResponse,
-  NoteResponse,
+  ChecklistReadResponse,
+  CodesReadResponse,
+  NoteReadResponse,
   ScribeServerClient,
   SessionResponse,
-  SummaryResponse,
+  SummaryReadResponse,
   TranscriptResponse,
 } from '../../src'
 import { e2eExternalId, env, hasCreds, makeServerClient, randomUuid, sleep } from './harness'
@@ -288,19 +289,25 @@ describe.runIf(hasCreds)('Scribe resource-API e2e (all ScribeClient methods)', (
   it('getNote(fresh session) → 404 or the note shape', async () => {
     await readArtifactOr404(
       () => client.getNote(primary.id),
-      (n: NoteResponse) => {
-        expect(n.session_id).toBeTruthy()
-        expect(typeof n.body).toBe('string')
-        expect(['draft', 'submitted', 'voided']).toContain(n.status)
+      (n: NoteReadResponse) => {
+        expect(['ready', 'pending', 'failed']).toContain(n.generation_status)
+        if (n.generation_status === 'ready') {
+          expect(typeof n.body === 'string' || n.structured != null).toBe(true)
+          expect(typeof n.version).toBe('number')
+        }
       },
       'getNote'
     )
   })
 
-  it('generateNote(no transcript) → generated note or a typed error (404 not_found)', async () => {
+  it('generateNote(no transcript) → generated note / enqueue or a typed error (404 not_found)', async () => {
     await generateOr4xx(
       () => client.generateNote(primary.id, { note_type: 'soap' }),
       v => {
+        if (isGenerationEnqueued(v)) {
+          expect(v.generation.status).toBeTruthy()
+          return
+        }
         expect(v.note).toBeTruthy()
         expect(v.generation).toBeTruthy()
         expect(['openai', 'anthropic']).toContain(v.generation.model_provider)
@@ -315,9 +322,9 @@ describe.runIf(hasCreds)('Scribe resource-API e2e (all ScribeClient methods)', (
     ).rejects.toBeInstanceOf(NotFoundError)
   })
 
-  it('finalizeNote(no note yet) → 404 (nothing to finalize) or the finalized note', async () => {
+  it('finalizeNote(no note yet) → 404/409 (nothing to finalize) or the finalized note', async () => {
     try {
-      const finalized = await client.finalizeNote(primary.id)
+      const finalized = await client.finalizeNote(primary.id, { base_version: 1 })
       expect(finalized.note).toBeTruthy()
       expect(finalized.note.session_id).toBeTruthy()
     } catch (err) {
@@ -329,18 +336,24 @@ describe.runIf(hasCreds)('Scribe resource-API e2e (all ScribeClient methods)', (
   it('getSummary(fresh session) → 404 or the summary shape', async () => {
     await readArtifactOr404(
       () => client.getSummary(primary.id),
-      (s: SummaryResponse) => {
-        expect(s.session_id).toBeTruthy()
-        expect(typeof s.summary).toBe('string')
+      (s: SummaryReadResponse) => {
+        expect(['ready', 'pending', 'failed']).toContain(s.generation_status)
+        if (s.generation_status === 'ready') {
+          expect(typeof s.summary).toBe('string')
+        }
       },
       'getSummary'
     )
   })
 
-  it('generateSummary(no transcript) → generated summary or a typed error (404 not_found)', async () => {
+  it('generateSummary(no transcript) → generated summary / enqueue or a typed error (404 not_found)', async () => {
     await generateOr4xx(
       () => client.generateSummary(primary.id),
       v => {
+        if (isGenerationEnqueued(v)) {
+          expect(v.generation.status).toBeTruthy()
+          return
+        }
         expect(v.summary).toBeTruthy()
         expect(v.generation).toBeTruthy()
       },
@@ -352,15 +365,17 @@ describe.runIf(hasCreds)('Scribe resource-API e2e (all ScribeClient methods)', (
   it('getChecklist(fresh session) → 404 or the checklist shape', async () => {
     await readArtifactOr404(
       () => client.getChecklist(primary.id),
-      (c: ChecklistResponse) => {
-        expect(c.session_id).toBeTruthy()
-        expect(Array.isArray(c.items)).toBe(true)
+      (c: ChecklistReadResponse) => {
+        expect(['ready', 'pending', 'failed']).toContain(c.generation_status)
+        if (c.generation_status === 'ready') {
+          expect(Array.isArray(c.items)).toBe(true)
+        }
       },
       'getChecklist'
     )
   })
 
-  it('generateChecklist(with items) → generated checklist or a typed error (503 dependency)', async () => {
+  it('generateChecklist(with items) → generated checklist / enqueue or a typed error (503 dependency)', async () => {
     await generateOr4xx(
       () =>
         client.generateChecklist(primary.id, {
@@ -371,6 +386,10 @@ describe.runIf(hasCreds)('Scribe resource-API e2e (all ScribeClient methods)', (
           ],
         }),
       v => {
+        if (isGenerationEnqueued(v)) {
+          expect(v.generation.status).toBeTruthy()
+          return
+        }
         expect(v.checklist).toBeTruthy()
         expect(Array.isArray(v.checklist.items)).toBe(true)
         expect(v.generation).toBeTruthy()
@@ -383,9 +402,11 @@ describe.runIf(hasCreds)('Scribe resource-API e2e (all ScribeClient methods)', (
   it('getCodes(fresh session) → 404 or the codes shape', async () => {
     await readArtifactOr404(
       () => client.getCodes(primary.id),
-      (c: CodesResponse) => {
-        expect(c.session_id).toBeTruthy()
-        expect(Array.isArray(c.items)).toBe(true)
+      (c: CodesReadResponse) => {
+        expect(['ready', 'pending', 'failed']).toContain(c.generation_status)
+        if (c.generation_status === 'ready') {
+          expect(Array.isArray(c.items)).toBe(true)
+        }
       },
       'getCodes'
     )

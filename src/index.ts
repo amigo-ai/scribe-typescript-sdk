@@ -21,6 +21,10 @@ export { HttpClient } from './http'
 export * from './types'
 export * from './errors'
 
+// --- Zoom session event stream (SSE, phase 06) ---
+export { streamSessionEvents, parseZoomSessionEvent } from './event-stream'
+export type { StreamSessionEventsOptions } from './event-stream'
+
 // --- Streaming WebSocket API client (browser / public half) ---
 export { ScribeStreamClient } from './stream-client'
 export type {
