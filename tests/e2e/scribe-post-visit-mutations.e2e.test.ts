@@ -14,8 +14,8 @@
  * Flow (SPEC §6.1 P4, phase 08):
  *   instantiate `ScribeClient` with an ASYNC token provider
  *   → createSession → listSessions / getSession
- *   → stream synthetic PCM16 (allocate + mintTicket + WS) so a note can be
- *     generated, then end the stream
+ *   → stream REAL speech PCM16 (allocate + mintTicket + WS), end the stream, and
+ *     wait for a non-empty transcript so a note can be generated
  *   → generateNote → poll getNote to a ready `version`
  *   → putNote({base_version}) returns { version: n+1 }
  *   → a STALE base_version returns 409 `version_conflict`
@@ -25,10 +25,11 @@
  *   → finalizeNote({base_version})
  *   → a post-finalize putNote returns 409 `invalid_session_state`
  *
- * Note generation needs a transcript — a fresh, never-streamed session 404s — so
- * the suite streams a short synthetic session first (mirrors the lifecycle
- * suite, which runs green against staging). If the streaming Fleet is exhausted
- * (503) the note may not generate; that surfaces as a loud failure rather than a
+ * Note generation needs a transcript — a fresh, never-streamed session 404s, and
+ * a synthetic sine tone transcribes to nothing — so the suite streams a committed
+ * real-speech fixture, then polls until the transcript is non-empty. If the
+ * streaming Fleet is exhausted (503) the transcript stays empty; that surfaces as
+ * a loud failure (empty-transcript / note 409) rather than a
  * silent pass.
  *
  * Zero-residue: sessions carry an `sdk-e2e-*` external id and are auto-reaped;
@@ -43,10 +44,37 @@ import {
   ScribeStreamClient,
   ServiceUnavailableError,
 } from '../../src'
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
 import type { NoteReadResponse, ScribeClient, ScribeStreamState, SessionResponse } from '../../src'
-import { e2eExternalId, hasToken, makeTokenClient, sleep, synthPcm16, tokenEnv } from './harness'
+import { e2eExternalId, hasToken, makeTokenClient, sleep, tokenEnv } from './harness'
 
 const hasWebSocket = typeof globalThis.WebSocket === 'function'
+
+// Real-speech PCM16 fixture (16 kHz mono, little-endian) — generated from macOS
+// `say` + `ffmpeg -ar 16000 -ac 1 -f s16le`. Unlike a synthetic sine tone, this
+// is intelligible speech, so staging STT produces a NON-EMPTY transcript and the
+// note-generation → mutation flow below can actually run. See fixtures/README.md.
+const SPEECH_FIXTURE = path.join(import.meta.dirname, 'fixtures', 'speech-16k-mono-s16le.pcm')
+const SAMPLE_RATE = 16_000
+const BYTES_PER_SAMPLE = 2
+const CHUNK_MS = 100
+/** 100 ms of PCM16 @ 16 kHz mono = 3200 bytes — matches the streaming pipeline's framing. */
+const CHUNK_BYTES = (SAMPLE_RATE * BYTES_PER_SAMPLE * CHUNK_MS) / 1000
+
+/** Load the committed real-speech PCM16 (16 kHz mono LE) fixture as raw bytes. */
+function loadSpeechPcm(): Uint8Array {
+  const buf = readFileSync(SPEECH_FIXTURE)
+  return new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength)
+}
+
+/** Stream the fixture as 100 ms PCM16 frames, paced in real time so STT keeps up. */
+async function streamRealSpeech(stream: ScribeStreamClient, pcm: Uint8Array): Promise<void> {
+  for (let off = 0; off < pcm.byteLength; off += CHUNK_BYTES) {
+    stream.sendAudio(pcm.subarray(off, Math.min(off + CHUNK_BYTES, pcm.byteLength)))
+    await sleep(CHUNK_MS)
+  }
+}
 
 /** Poll `getState()` until it reaches `target` or fails/times out. */
 async function waitForState(
@@ -69,26 +97,21 @@ async function waitForState(
   throw new Error(`timed out waiting for state="${target}" (last="${stream.getState()}")`)
 }
 
-/** Stream `durationMs` of synthetic PCM16 in 100 ms chunks. */
-async function streamAudio(stream: ScribeStreamClient, durationMs: number): Promise<void> {
-  const chunks = Math.floor(durationMs / 100)
-  for (let i = 0; i < chunks; i++) {
-    stream.sendAudio(synthPcm16(100))
-    await sleep(100)
-  }
-}
-
 /**
- * Best-effort: stream a short synthetic session so a note can be generated.
- * Returns true if audio was streamed. Tolerates Fleet exhaustion (503) and a
- * missing global WebSocket (Node < 22) by returning false.
+ * Stream the committed REAL-SPEECH fixture through the WS so staging STT produces
+ * a non-empty transcript (a fresh, never-streamed session 404s on note
+ * generation; a synthetic sine tone transcribes to nothing). Returns true if
+ * audio was streamed. Tolerates Fleet exhaustion (503) and a missing global
+ * WebSocket (Node < 22) by returning false — the caller then surfaces the empty
+ * transcript loudly rather than silently passing.
  */
-async function streamSyntheticSession(client: ScribeClient, sessionId: string): Promise<boolean> {
+async function streamRealSpeechSession(client: ScribeClient, sessionId: string): Promise<boolean> {
   if (!hasWebSocket) {
     // eslint-disable-next-line no-console
     console.warn('[ga token e2e] no global WebSocket (Node < 22) — skipping the streaming leg.')
     return false
   }
+  const pcm = loadSpeechPcm()
   const errors: Error[] = []
   const stream = new ScribeStreamClient({
     sessionId,
@@ -110,7 +133,7 @@ async function streamSyntheticSession(client: ScribeClient, sessionId: string): 
         // eslint-disable-next-line no-console
         console.warn(
           `[ga token e2e] allocate 503 (retry ${err.retryAfterSeconds}s) — Fleet exhausted; ` +
-            `streaming leg skipped (note generation may 404).`
+            `streaming leg skipped (transcript will be empty).`
         )
         return false
       }
@@ -119,7 +142,7 @@ async function streamSyntheticSession(client: ScribeClient, sessionId: string): 
     if (stream.getState() !== 'ended' && stream.getState() !== 'failed') {
       await waitForState(stream, 'streaming', 60_000, errors)
       streamed = true
-      await streamAudio(stream, 3_000)
+      await streamRealSpeech(stream, pcm)
     }
   } finally {
     stream.end()
@@ -127,6 +150,31 @@ async function streamSyntheticSession(client: ScribeClient, sessionId: string): 
   // Give the worker a moment to finalize the transcript after end().
   await sleep(2_000)
   return streamed
+}
+
+/** Poll `getTranscript` until it has ≥1 segment (STT finalized the speech). */
+async function pollTranscriptNonEmpty(
+  client: ScribeClient,
+  sessionId: string,
+  budgetMs = 60_000
+): Promise<number> {
+  const deadline = Date.now() + budgetMs
+  for (;;) {
+    const transcript = await client.getTranscript(sessionId).catch((err: unknown) => {
+      if (err instanceof NotFoundError) {
+        return undefined
+      }
+      throw err
+    })
+    const count = transcript?.segments?.length ?? 0
+    if (count > 0) {
+      return count
+    }
+    if (Date.now() > deadline) {
+      throw new Error(`transcript still empty after ${budgetMs}ms (STT produced no segments)`)
+    }
+    await sleep(2_000)
+  }
 }
 
 /** Poll `getNote` until it reports a ready version (tolerating a transient 404). */
@@ -217,8 +265,11 @@ describe.runIf(hasToken)('Scribe GA post-visit mutations e2e (provider JWT → s
     const got = await client.getSession(session.id)
     expect(got.id).toBe(session.id)
 
-    // 3. Stream a short synthetic session so a note can be generated.
-    await streamSyntheticSession(client, session.id)
+    // 3. Stream REAL speech so STT produces a transcript a note can be built from,
+    //    then wait until the transcript has finalized segments.
+    await streamRealSpeechSession(client, session.id)
+    const segmentCount = await pollTranscriptNonEmpty(client, session.id)
+    expect(segmentCount).toBeGreaterThan(0)
 
     // 4. Generate the note, then read its ready version for the base_version.
     await client.generateNote(session.id, { note_type: 'soap' })
@@ -261,8 +312,8 @@ describe.runIf(hasToken)('Scribe GA post-visit mutations e2e (provider JWT → s
     expect(checklist.items.find(i => i.id === 'a')?.state).toBe('checked')
 
     // 8. patchCode succeeds when a suggestion exists. Codes derive from the
-    //    transcript/note; an empty synthetic transcript may legitimately yield
-    //    none — assert the decision when present, else record the gap loudly.
+    //    transcript/note; a short transcript may legitimately yield none —
+    //    assert the decision when present, else record the gap loudly.
     const codesGen = await client.generateCodes(session.id)
     if (isGenerationEnqueued(codesGen)) {
       await pollReady(() => client.getCodes(session.id), 'codes')
