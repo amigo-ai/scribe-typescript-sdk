@@ -16,6 +16,7 @@ import { HttpClient } from '../src/http'
 import type { FetchLike } from '../src/http'
 import { TimeoutError } from '../src/errors'
 import { streamSessionEvents } from '../src/event-stream'
+import { askSession } from '../src/ask-stream'
 import { ScribeStreamClient } from '../src/stream-client'
 import type { ScribeStreamState } from '../src/stream-client'
 import { MockWs } from './mock-ws'
@@ -145,6 +146,39 @@ describe('native-API receiver binding (Illegal-invocation guard)', () => {
     })
     expect(events).toEqual(['bot_status'])
     expect(call).toBe(2) // proves the reconnect (and thus delay timer) ran
+  }, 10_000)
+
+  it('ask-stream retry delay timer is globalThis-bound', async () => {
+    // First connection: clean EOF with zero frames → the initial-connection retry
+    // path schedules a backoff delay() (a timer) before the second connection
+    // delivers a terminal `done`. Under the guard, an unbound setTimeout in
+    // delay() would throw "Illegal invocation".
+    let call = 0
+    const fetchImpl: FetchLike = () => {
+      call += 1
+      return Promise.resolve(
+        call === 1
+          ? sseResponse([]) // clean EOF, no frames → retry path (delay)
+          : sseResponse(['event: done\ndata: {"generation_id":"g-1"}\n\n'])
+      )
+    }
+    const types = await withTimerReceiverGuard(async () => {
+      const out: string[] = []
+      for await (const f of askSession({
+        baseUrl: 'https://x.test',
+        workspaceId: 'ws',
+        sessionId: 'sess',
+        token: 't',
+        question: 'q',
+        fetch: fetchImpl,
+        maxRetries: 3,
+      })) {
+        out.push(f.type)
+      }
+      return out
+    })
+    expect(types).toEqual(['done'])
+    expect(call).toBe(2) // proves the retry (and thus delay timer) ran
   }, 10_000)
 
   it('stream-client keepalive/reconnect timers are globalThis-bound', async () => {

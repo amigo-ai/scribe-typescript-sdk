@@ -25,6 +25,15 @@ export * from './errors'
 export { streamSessionEvents, parseZoomSessionEvent } from './event-stream'
 export type { StreamSessionEventsOptions } from './event-stream'
 
+// --- Ask streaming Q&A helper (SSE, phase 09) ---
+export { askSession, parseAskFrame } from './ask-stream'
+export type {
+  AskSessionOptions,
+  AskStreamFrame,
+  AskDeltaFrame,
+  AskDoneFrame,
+} from './ask-stream'
+
 // --- Streaming WebSocket API client (browser / public half) ---
 export { ScribeStreamClient } from './stream-client'
 export type {

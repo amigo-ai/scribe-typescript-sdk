@@ -240,6 +240,7 @@ export type NoteGenerationResult = GeneratedNoteResponse | GenerationEnqueueResp
 export type SummaryGenerationResult = GeneratedSummaryResponse | GenerationEnqueueResponse
 export type ChecklistGenerationResult = GeneratedChecklistResponse | GenerationEnqueueResponse
 export type CodesGenerationResult = GeneratedCodesResponse | GenerationEnqueueResponse
+export type ActionsGenerationResult = GeneratedActionsResponse | GenerationEnqueueResponse
 
 /**
  * Narrow a `generate*` result to the async-enqueue (`202`) branch. When `true`,
@@ -262,7 +263,8 @@ export function isGenerationEnqueued(
     (g.artifact_kind === 'note' ||
       g.artifact_kind === 'summary' ||
       g.artifact_kind === 'checklist' ||
-      g.artifact_kind === 'codes')
+      g.artifact_kind === 'codes' ||
+      g.artifact_kind === 'actions')
   )
 }
 
@@ -377,3 +379,65 @@ export type TranscriptSegmentEvent = Schemas['TranscriptSegmentEvent']
 
 /** `transcript_finalized` SSE frame payload (`TranscriptFinalizedEvent`) — emitted once, empty body. */
 export type TranscriptFinalizedEvent = Schemas['TranscriptFinalizedEvent']
+
+// ---------------------------------------------------------------------------
+// Phase 09 assist surface (0.5.0). Aliases of the generated schemas for the
+// `actions` artifact (async job/artifact/job-state, same 202/200 contract as
+// note/summary/checklist/codes), section-scoped note regeneration, checklist
+// auto-check, and the `/ask` streaming Q&A request/history shapes. The `/ask`
+// answer FRAME types (`delta`/`done`) live in `ask-stream.ts` (SSE, not part of
+// the JSON schema), mirroring the phase-06 event-stream helper.
+// ---------------------------------------------------------------------------
+
+/* --- Actions artifact (phase 09) --- */
+
+/** A single suggested follow-up action (`ActionItemResponse`) — `id` + `text` + `kind`. */
+export type ActionItemResponse = Schemas['ActionItemResponse']
+
+/** A session's `actions` artifact (`ActionsResponse`) — `session_id` + the `items`. */
+export type ActionsResponse = Schemas['ActionsResponse']
+
+/** Response from generate-actions (`GeneratedActionsResponse`) — the actions plus their generation metadata. */
+export type GeneratedActionsResponse = Schemas['GeneratedActionsResponse']
+
+/**
+ * Reload-safe actions poller (`ActionsReadResponse`) — carries `generation_status`;
+ * `items` is present only when `generation_status === 'ready'`.
+ */
+export type ActionsReadResponse = Schemas['ActionsReadResponse']
+
+/* --- Section-scoped note regeneration (phase 09) --- */
+
+/**
+ * Request body for {@link ScribeClient.regenerateSection}
+ * (`RegenerateSectionRequest`) — `{ section_id, instructions?, base_version }`.
+ * `base_version` is the note version the client last read; a stale value returns
+ * `409 version_conflict` (never clobbers a racing manual edit), and once the note
+ * is finalized it returns `409 invalid_session_state`.
+ */
+export type RegenerateSectionRequest = Schemas['RegenerateSectionRequest']
+
+/* --- Checklist auto-check (phase 09) --- */
+
+/** A single per-item auto-check verdict (`AutoCheckMatch`) — `item_id`, `matched`, optional `evidence`. */
+export type AutoCheckMatch = Schemas['AutoCheckMatch']
+
+/**
+ * Response from {@link ScribeClient.autoCheckChecklist} (`AutoCheckResponse`) —
+ * the LLM's per-item `matches`. Matched items are also persisted server-side as
+ * `source='auto'` state (coexisting with, never clobbering, manual toggles).
+ */
+export type AutoCheckResponse = Schemas['AutoCheckResponse']
+
+/* --- Ask (streaming Q&A) request shapes (phase 09) --- */
+
+/** A prior turn in the {@link AskRequest.history} (`AskHistoryMessage`) — `role` (`user`/`assistant`) + `text`. */
+export type AskHistoryMessage = Schemas['AskHistoryMessage']
+
+/**
+ * Request body for the `/ask` streaming helper ({@link askSession})
+ * (`AskRequest`) — a required `question` plus optional prior `history`. The
+ * answer streams back as SSE `delta`/`done` frames (see `ask-stream.ts`); it is
+ * not persisted as an artifact.
+ */
+export type AskRequest = Schemas['AskRequest']

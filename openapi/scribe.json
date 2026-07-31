@@ -1,6 +1,102 @@
 {
   "components": {
     "schemas": {
+      "ActionItemResponse": {
+        "properties": {
+          "id": {
+            "maxLength": 128,
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "maxLength": 64,
+            "title": "Kind",
+            "type": "string"
+          },
+          "text": {
+            "maxLength": 2000,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "text",
+          "kind"
+        ],
+        "title": "ActionItemResponse",
+        "type": "object"
+      },
+      "ActionsReadResponse": {
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ErrorDetail"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "generation_status": {
+            "$ref": "#/components/schemas/GenerationReadStatus"
+          },
+          "items": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ActionItemResponse"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Items"
+          },
+          "session_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Id"
+          }
+        },
+        "required": [
+          "generation_status"
+        ],
+        "title": "ActionsReadResponse",
+        "type": "object"
+      },
+      "ActionsResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ActionItemResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "session_id": {
+            "format": "uuid",
+            "title": "Session Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id",
+          "items"
+        ],
+        "title": "ActionsResponse",
+        "type": "object"
+      },
       "AllocateResponse": {
         "properties": {
           "expires_at": {
@@ -236,9 +332,106 @@
           "note",
           "summary",
           "checklist",
-          "codes"
+          "codes",
+          "actions"
         ],
         "type": "string"
+      },
+      "AskHistoryMessage": {
+        "properties": {
+          "role": {
+            "enum": [
+              "user",
+              "assistant"
+            ],
+            "title": "Role",
+            "type": "string"
+          },
+          "text": {
+            "maxLength": 10000,
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "role",
+          "text"
+        ],
+        "title": "AskHistoryMessage",
+        "type": "object"
+      },
+      "AskRequest": {
+        "description": "Body of `POST /sessions/{id}/ask` — a streaming Q&A over the transcript + latest note.\n\nThe answer streams back as SSE `delta {text}` frames then a terminal `done {generation_id}`; the\nresponse is not persisted as an artifact (only a provenance row is recorded).",
+        "properties": {
+          "history": {
+            "items": {
+              "$ref": "#/components/schemas/AskHistoryMessage"
+            },
+            "maxItems": 50,
+            "title": "History",
+            "type": "array"
+          },
+          "question": {
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Question",
+            "type": "string"
+          }
+        },
+        "required": [
+          "question"
+        ],
+        "title": "AskRequest",
+        "type": "object"
+      },
+      "AutoCheckMatch": {
+        "properties": {
+          "evidence": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence"
+          },
+          "item_id": {
+            "maxLength": 128,
+            "title": "Item Id",
+            "type": "string"
+          },
+          "matched": {
+            "title": "Matched",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "item_id",
+          "matched"
+        ],
+        "title": "AutoCheckMatch",
+        "type": "object"
+      },
+      "AutoCheckResponse": {
+        "description": "200 body of `POST /sessions/{id}/checklist/auto-check`: the LLM's per-item match verdict.\n\nMatched items are also persisted server-side as `source='auto'` checklist state (coexisting with,\nand never clobbering, manual `PATCH /checklist` toggles).",
+        "properties": {
+          "matches": {
+            "items": {
+              "$ref": "#/components/schemas/AutoCheckMatch"
+            },
+            "title": "Matches",
+            "type": "array"
+          }
+        },
+        "required": [
+          "matches"
+        ],
+        "title": "AutoCheckResponse",
+        "type": "object"
       },
       "BotStatusEvent": {
         "description": "`bot_status` SSE frame payload: the Zoom capture bot's lifecycle state (+ optional reason).\n\n`joining -> listening -> paused -> leaving -> done|error`; `reason` carries a machine string on the\noff-happy-path transitions (e.g. `join_timeout`). `done`/`error` are terminal: the event stream\ncloses right after relaying one so the client stops reconnecting.",
@@ -1012,6 +1205,22 @@
         "title": "GenerateNoteRequest",
         "type": "object"
       },
+      "GeneratedActionsResponse": {
+        "properties": {
+          "actions": {
+            "$ref": "#/components/schemas/ActionsResponse"
+          },
+          "generation": {
+            "$ref": "#/components/schemas/GenerationMetadata"
+          }
+        },
+        "required": [
+          "actions",
+          "generation"
+        ],
+        "title": "GeneratedActionsResponse",
+        "type": "object"
+      },
       "GeneratedChecklistResponse": {
         "properties": {
           "checklist": {
@@ -1394,6 +1603,40 @@
           "updated_at"
         ],
         "title": "NoteResponse",
+        "type": "object"
+      },
+      "RegenerateSectionRequest": {
+        "description": "Body of `POST /sessions/{id}/note/regenerate-section` (SPEC §6.1 P4).\n\nRegenerates a single named section of the current note. `base_version` is the note version the\nclient last read; a stale value returns 409 version_conflict (never clobbers a racing manual edit).",
+        "properties": {
+          "base_version": {
+            "minimum": 1,
+            "title": "Base Version",
+            "type": "integer"
+          },
+          "instructions": {
+            "anyOf": [
+              {
+                "maxLength": 1200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Instructions"
+          },
+          "section_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Section Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "section_id",
+          "base_version"
+        ],
+        "title": "RegenerateSectionRequest",
         "type": "object"
       },
       "SessionListResponse": {
@@ -2787,6 +3030,230 @@
         ]
       }
     },
+    "/v1/{workspace_id}/sessions/{session_id}/actions": {
+      "get": {
+        "description": "Reload-safe action-items poller (phase 09): the same job-state contract as the other artifacts.",
+        "operationId": "get-session-actions",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActionsReadResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bearer token is absent or invalid."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The principal is outside this workspace or provider scope."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "No provider-owned resource exists at this URL."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Generation cannot proceed for the current session state."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Clinical generation is temporarily unavailable."
+          }
+        },
+        "summary": "Get Actions",
+        "tags": [
+          "Scribe sessions"
+        ]
+      },
+      "post": {
+        "description": "Enqueue post-visit action-item generation for an owned session (explicit regenerate, phase 09).\n\nAsync ensure-semantics identical to codes/summary: derives the idempotency identity from the\ncanonical transcript + latest note (no request body), idempotently enqueues a ``scribe.generations``\njob (``artifact_kind='actions'``), and returns 202 with the job envelope or 200 with the artifact\nwhen an identical job already succeeded. Actions are also auto-enqueued server-side when the note job\nsucceeds. Rejected once the session is terminal (409 ``invalid_session_state``, post-finalize).",
+        "operationId": "generate-session-actions",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GeneratedActionsResponse"
+                }
+              }
+            },
+            "description": "An identical job already succeeded; the actions are returned."
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/GeneratedActionsResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/GenerationEnqueueResponse"
+                    }
+                  ],
+                  "title": "Response Generate-Session-Actions"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bearer token is absent or invalid."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The principal is outside this workspace or provider scope."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "No provider-owned resource exists at this URL."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Generation cannot proceed for the current session state."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Clinical generation is temporarily unavailable."
+          }
+        },
+        "summary": "Generate Actions",
+        "tags": [
+          "Scribe sessions"
+        ]
+      }
+    },
     "/v1/{workspace_id}/sessions/{session_id}/allocate": {
       "post": {
         "description": "Allocate a scribe-streaming GameServer for an owned session and return `{host, expires_at}`.\n\nThe dispatcher leg of create -> allocate -> WS-attach (decision 3): the browser never allocates.\nThe allocation is intentionally NOT persisted as a session mutation — a reconnect re-allocates a\nfresh GameServer, and the WS attach re-verifies ownership.",
@@ -2894,6 +3361,113 @@
           }
         },
         "summary": "Allocate Session",
+        "tags": [
+          "Scribe sessions"
+        ]
+      }
+    },
+    "/v1/{workspace_id}/sessions/{session_id}/ask": {
+      "post": {
+        "description": "Streaming Q&A over the session transcript + latest note (SPEC §3.3, header-auth fetch streaming).\n\nNot persisted as an artifact — only a provenance row is recorded (its id is the `generation_id` in\nthe terminal `done` frame). Reuses `generation.py`'s provider clients + circuit breakers. Allowed on\na terminal session (post-visit Q&A is read-only; the post-finalize immutability guard applies only\nto regenerate-section + actions generation).",
+        "operationId": "ask-session",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AskRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              },
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "A Server-Sent Event stream (header-authenticated `fetch` streaming, not `EventSource`): one or more `delta` frames each `{text}`, then a terminal `done` frame `{generation_id}`; a `ping` keepalive every 15 s, and an `error` frame if generation fails mid-stream. Each frame is `event: <event>\\ndata: <json>\\n\\n`."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bearer token is absent or invalid."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The principal is outside this workspace or provider scope."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "No provider-owned resource exists at this URL."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Clinical generation is temporarily unavailable."
+          }
+        },
+        "summary": "Ask Session",
         "tags": [
           "Scribe sessions"
         ]
@@ -3322,6 +3896,100 @@
           }
         },
         "summary": "Generate Checklist",
+        "tags": [
+          "Scribe sessions"
+        ]
+      }
+    },
+    "/v1/{workspace_id}/sessions/{session_id}/checklist/auto-check": {
+      "post": {
+        "description": "LLM auto-check of the generated checklist against the (partial) transcript mid-session (phase 09).\n\nEvaluates each generated checklist item against the best-available transcript and returns a per-item\n`matched` verdict; matched items are persisted as `source='auto'` checklist state that COEXISTS with\nmanual `PATCH /checklist` toggles — the upsert preserves any manually-decided item and never\nclobbers it. Throttling is client-side by contract; the server relies on the provider circuit\nbreakers. No generated checklist yet (or no transcript) → an empty `{matches:[]}`.",
+        "operationId": "auto-check-session-checklist",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutoCheckResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bearer token is absent or invalid."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The principal is outside this workspace or provider scope."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "No provider-owned resource exists at this URL."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The session is terminal and no longer accepts mutations (`invalid_session_state`)."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          }
+        },
+        "summary": "Auto Check Checklist",
         "tags": [
           "Scribe sessions"
         ]
@@ -4296,6 +4964,110 @@
           }
         },
         "summary": "Finalize Note",
+        "tags": [
+          "Scribe sessions"
+        ]
+      }
+    },
+    "/v1/{workspace_id}/sessions/{session_id}/note/regenerate-section": {
+      "post": {
+        "description": "Regenerate a single section of the note as a new version (async ensure-semantics, phase 09).\n\nReuses the phase-08 note `version` for optimistic concurrency: a stale `base_version` (a manual edit\nor another regen landed since the client read) is rejected up front with 409 version_conflict, and\nthe worker re-checks it under a compare-and-set at persist time so a race can never clobber a newer\nnote. Enqueues an `artifact_kind='note'` job whose params carry `section_id`/`base_version`; the\nworker rewrites that section and persists `base_version + 1`. Returns 202 with the job envelope.\nRejected once the session is terminal (409 invalid_session_state, post-finalize immutability).",
+        "operationId": "regenerate-session-note-section",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegenerateSectionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerationEnqueueResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bearer token is absent or invalid."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The principal is outside this workspace or provider scope."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "No provider-owned resource exists at this URL."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The base_version is stale (`version_conflict`) or the session is terminal (`invalid_session_state`)."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          }
+        },
+        "summary": "Regenerate Note Section",
         "tags": [
           "Scribe sessions"
         ]
