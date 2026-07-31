@@ -277,7 +277,9 @@ describe.runIf(hasToken)('Scribe assist surface e2e (provider JWT → staging)',
   afterAll(() => {
     if (createdIds.length) {
       // eslint-disable-next-line no-console
-      console.warn(`[assist token e2e] created (reaper-eligible) session ids: ${createdIds.join(', ')}`)
+      console.warn(
+        `[assist token e2e] created (reaper-eligible) session ids: ${createdIds.join(', ')}`
+      )
     }
   })
 
@@ -373,7 +375,9 @@ function firstSectionId(note: NoteReadResponse): string | undefined {
     const sections = (structured as { sections?: unknown }).sections
     if (Array.isArray(sections)) {
       for (const s of sections) {
-        const id = (s as { id?: unknown; section_id?: unknown }).id ?? (s as { section_id?: unknown }).section_id
+        const id =
+          (s as { id?: unknown; section_id?: unknown }).id ??
+          (s as { section_id?: unknown }).section_id
         if (typeof id === 'string' && id) {
           return id
         }

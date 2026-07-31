@@ -186,7 +186,10 @@ describe('autoCheckChecklist', () => {
 
 describe('askSession (streaming Q&A via the client)', () => {
   /** A fetch that streams `chunks` as an SSE body once. */
-  function sseFetch(chunks: string[]): { fetch: FetchLike; calls: Array<{ url: string; body: unknown }> } {
+  function sseFetch(chunks: string[]): {
+    fetch: FetchLike
+    calls: Array<{ url: string; body: unknown }>
+  } {
     const calls: Array<{ url: string; body: unknown }> = []
     const fetch: FetchLike = (url, init) => {
       calls.push({ url, body: init?.body })

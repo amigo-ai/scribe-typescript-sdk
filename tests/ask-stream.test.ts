@@ -166,7 +166,14 @@ describe('askSession', () => {
       ]),
     ])
     const frames = await collect(
-      askSession({ baseUrl: BASE, workspaceId: WS, sessionId: SID, token: 't', question: 'q', fetch })
+      askSession({
+        baseUrl: BASE,
+        workspaceId: WS,
+        sessionId: SID,
+        token: 't',
+        question: 'q',
+        fetch,
+      })
     )
     expect(frames).toEqual([
       { type: 'delta', text: 'partial' },
@@ -178,7 +185,14 @@ describe('askSession', () => {
     const { fetch, calls } = queuedFetch([sseResponse([], 404)])
     await expect(
       collect(
-        askSession({ baseUrl: BASE, workspaceId: WS, sessionId: SID, token: 't', question: 'q', fetch })
+        askSession({
+          baseUrl: BASE,
+          workspaceId: WS,
+          sessionId: SID,
+          token: 't',
+          question: 'q',
+          fetch,
+        })
       )
     ).rejects.toBeInstanceOf(NotFoundError)
     expect(calls).toHaveLength(1)
@@ -258,10 +272,14 @@ describe('askSession', () => {
 
   it('validates required inputs', async () => {
     await expect(
-      collect(askSession({ baseUrl: BASE, workspaceId: WS, sessionId: '', token: 't', question: 'q' }))
+      collect(
+        askSession({ baseUrl: BASE, workspaceId: WS, sessionId: '', token: 't', question: 'q' })
+      )
     ).rejects.toThrow(/sessionId is required/)
     await expect(
-      collect(askSession({ baseUrl: BASE, workspaceId: WS, sessionId: SID, token: 't', question: '' }))
+      collect(
+        askSession({ baseUrl: BASE, workspaceId: WS, sessionId: SID, token: 't', question: '' })
+      )
     ).rejects.toThrow(/question is required/)
   })
 })
