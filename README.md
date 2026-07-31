@@ -33,6 +33,14 @@ Artifacts (note / summary / checklist / codes):
 - `getCodes` — `GET /v1/{workspace_id}/sessions/{session_id}/codes`
 - `generateCodes` — `POST /v1/{workspace_id}/sessions/{session_id}/codes`
 
+Assist (in-visit + post-visit AI helpers):
+
+- `getActions` — `GET /v1/{workspace_id}/sessions/{session_id}/actions` (reload-safe poller)
+- `generateActions` — `POST /v1/{workspace_id}/sessions/{session_id}/actions` (async `202`/`200`; auto-enqueued when the note job succeeds)
+- `regenerateSection` — `POST /v1/{workspace_id}/sessions/{session_id}/note/regenerate-section` (`{ section_id, instructions?, base_version }` → `202`; stale `base_version` → `409 version_conflict`, post-finalize → `409 invalid_session_state`)
+- `autoCheckChecklist` — `POST /v1/{workspace_id}/sessions/{session_id}/checklist/auto-check` → `200 { matches }` (persists `source='auto'` state; coexists with manual toggles)
+- `askSession` — `POST /v1/{workspace_id}/sessions/{session_id}/ask` — a header-authenticated **SSE** streaming Q&A helper (an async generator of `delta {text}` frames then a terminal `done {generation_id}`; not `EventSource`, not persisted as an artifact)
+
 It also ships the **recording-independent streaming WebSocket API client**
 (`ScribeStreamClient`) — the WS transport/protocol layer that attaches with a
 short-lived **attach ticket**, streams **caller-supplied PCM16 bytes**, receives

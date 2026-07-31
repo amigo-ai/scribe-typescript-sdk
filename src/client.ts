@@ -1,3 +1,4 @@
+import { type AskSessionOptions, type AskStreamFrame, askSession } from './ask-stream'
 import { ConfigurationError } from './errors'
 import { streamSessionEvents } from './event-stream'
 import {
@@ -8,9 +9,13 @@ import {
 } from './http'
 import type { ZoomSessionEvent } from './types'
 import type {
+  ActionsGenerationResult,
+  ActionsReadResponse,
   AllocateResponse,
   AppointmentListResponse,
   AppointmentResponse,
+  AskHistoryMessage,
+  AutoCheckResponse,
   ChecklistGenerationResult,
   ChecklistReadResponse,
   ChecklistStateResponse,
@@ -23,10 +28,12 @@ import type {
   FinalizeNoteResponse,
   GenerateChecklistRequest,
   GenerateNoteRequest,
+  GenerationEnqueueResponse,
   ListAppointmentsParams,
   ListSessionsParams,
   NoteGenerationResult,
   NoteReadResponse,
+  RegenerateSectionRequest,
   SessionListResponse,
   SessionResponse,
   SummaryGenerationResult,
@@ -804,6 +811,163 @@ export class ScribeClient {
       signal: options?.signal,
       timeoutMs: options?.timeoutMs,
     })
+  }
+
+  // -------------------------------------------------------------------------
+  // Phase 09 assist surface (0.5.0): actions artifact, section-scoped note
+  // regeneration, checklist auto-check, and the `/ask` streaming Q&A helper.
+  // -------------------------------------------------------------------------
+
+  /**
+   * Fetch the persisted follow-up `actions` for a session.
+   *
+   * `GET /v1/{workspace_id}/sessions/{session_id}/actions` → 200. Requires
+   * `scribe:sessions:read_own`. Returns the reload-safe
+   * {@link ActionsReadResponse}: `items` is present only when
+   * `generation_status === 'ready'`; while `pending` it is null, and `failed`
+   * carries an {@link ErrorDetail}. Poll this after an enqueued
+   * {@link ScribeClient.generateActions}. 404 while no actions artifact exists.
+   */
+  async getActions(sessionId: string, options?: CallOptions): Promise<ActionsReadResponse> {
+    const workspaceId = this.resolveWorkspaceId(options)
+    if (!sessionId) {
+      throw new ConfigurationError('sessionId is required', 'sessionId')
+    }
+    return this.http.request<ActionsReadResponse>({
+      method: 'GET',
+      path: `/v1/${workspaceId}/sessions/${encodeURIComponent(sessionId)}/actions`,
+      signal: options?.signal,
+      timeoutMs: options?.timeoutMs,
+    })
+  }
+
+  /**
+   * Generate the follow-up `actions` for a session.
+   *
+   * `POST /v1/{workspace_id}/sessions/{session_id}/actions` → 200 (synchronous
+   * artifact) or 202 (async job enqueued). Requires `scribe:sessions:write`.
+   * Takes no request body. The actions job is also auto-enqueued when the note
+   * job succeeds, and is idempotent by the same key. Returns
+   * {@link ActionsGenerationResult} — narrow with {@link isGenerationEnqueued}
+   * to poll {@link ScribeClient.getActions} for the enqueued case.
+   */
+  async generateActions(
+    sessionId: string,
+    options?: CallOptions
+  ): Promise<ActionsGenerationResult> {
+    const workspaceId = this.resolveWorkspaceId(options)
+    if (!sessionId) {
+      throw new ConfigurationError('sessionId is required', 'sessionId')
+    }
+    return this.http.request<ActionsGenerationResult>({
+      method: 'POST',
+      path: `/v1/${workspaceId}/sessions/${encodeURIComponent(sessionId)}/actions`,
+      signal: options?.signal,
+      timeoutMs: options?.timeoutMs,
+    })
+  }
+
+  /**
+   * Regenerate a single named section of the current clinical note.
+   *
+   * `POST /v1/{workspace_id}/sessions/{session_id}/note/regenerate-section` →
+   * `202 {generation}`. Requires `scribe:notes:rw_own`. The body is
+   * `{ section_id, instructions?, base_version }`: `base_version` is the note
+   * version the client last read ({@link NoteReadResponse.version}); on success
+   * the note `version` is bumped (poll {@link ScribeClient.getNote}). A stale
+   * `base_version` loses the compare-and-set and returns `409` with
+   * `errorCode === 'version_conflict'` ({@link ConflictError}); once the note is
+   * finalized it returns `409 invalid_session_state`.
+   */
+  async regenerateSection(
+    sessionId: string,
+    input: RegenerateSectionRequest,
+    options?: CallOptions
+  ): Promise<GenerationEnqueueResponse> {
+    const workspaceId = this.resolveWorkspaceId(options)
+    if (!sessionId) {
+      throw new ConfigurationError('sessionId is required', 'sessionId')
+    }
+    if (input == null) {
+      throw new ConfigurationError('input is required', 'input')
+    }
+    return this.http.request<GenerationEnqueueResponse>({
+      method: 'POST',
+      path: `/v1/${workspaceId}/sessions/${encodeURIComponent(sessionId)}/note/regenerate-section`,
+      body: input,
+      signal: options?.signal,
+      timeoutMs: options?.timeoutMs,
+    })
+  }
+
+  /**
+   * Auto-check the session's checklist against the (partial) transcript.
+   *
+   * `POST /v1/{workspace_id}/sessions/{session_id}/checklist/auto-check` → 200.
+   * Requires `scribe:notes:rw_own`. Takes no request body. Returns
+   * {@link AutoCheckResponse} — the LLM's per-item `matches`
+   * (`{ item_id, matched, evidence? }`). Matched items are also persisted
+   * server-side as `source='auto'` state, coexisting with (never clobbering) the
+   * manual toggles from {@link ScribeClient.patchChecklist}. `409`
+   * ({@link ConflictError}) once the session is in a terminal state.
+   */
+  async autoCheckChecklist(sessionId: string, options?: CallOptions): Promise<AutoCheckResponse> {
+    const workspaceId = this.resolveWorkspaceId(options)
+    if (!sessionId) {
+      throw new ConfigurationError('sessionId is required', 'sessionId')
+    }
+    return this.http.request<AutoCheckResponse>({
+      method: 'POST',
+      path: `/v1/${workspaceId}/sessions/${encodeURIComponent(sessionId)}/checklist/auto-check`,
+      signal: options?.signal,
+      timeoutMs: options?.timeoutMs,
+    })
+  }
+
+  /**
+   * Ask a question over a session's transcript + latest note (streaming Q&A).
+   *
+   * `POST /v1/{workspace_id}/sessions/{session_id}/ask` — header-authenticated
+   * `fetch` streaming (not `EventSource`, which can neither send the Bearer
+   * header nor POST a JSON body). Returns an async generator of
+   * {@link AskStreamFrame}s: `delta {text}` chunks then a terminal
+   * `done {generation_id}`; consume it with `for await` and read the
+   * `generation_id` off the final frame. The answer is NOT persisted as an
+   * artifact (only a provenance row). Aborts (and stops any pending retry) when
+   * `options.signal` fires.
+   */
+  askSession(
+    sessionId: string,
+    input: { question: string; history?: AskHistoryMessage[] },
+    options?: {
+      workspaceId?: string
+      signal?: AbortSignal
+      maxRetries?: number
+    }
+  ): AsyncGenerator<AskStreamFrame, void, unknown> {
+    if (!sessionId) {
+      throw new ConfigurationError('sessionId is required', 'sessionId')
+    }
+    if (!input?.question) {
+      throw new ConfigurationError('question is required', 'question')
+    }
+    const workspaceId = options?.workspaceId ?? this.defaultWorkspaceId
+    if (!workspaceId) {
+      throw new ConfigurationError('workspaceId is required', 'workspaceId')
+    }
+    const askOptions: AskSessionOptions = {
+      baseUrl: this.baseUrl,
+      workspaceId,
+      sessionId,
+      token: this.token,
+      question: input.question,
+      ...(input.history ? { history: input.history } : {}),
+      ...(this.fetchImpl ? { fetch: this.fetchImpl } : {}),
+      ...(this.defaultHeaders ? { defaultHeaders: this.defaultHeaders } : {}),
+      ...(options?.signal ? { signal: options.signal } : {}),
+      ...(options?.maxRetries !== undefined ? { maxRetries: options.maxRetries } : {}),
+    }
+    return askSession(askOptions)
   }
 
   /**

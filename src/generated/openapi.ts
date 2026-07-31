@@ -128,6 +128,36 @@ export interface paths {
         patch: operations["update-session"];
         trace?: never;
     };
+    "/v1/{workspace_id}/sessions/{session_id}/actions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Actions
+         * @description Reload-safe action-items poller (phase 09): the same job-state contract as the other artifacts.
+         */
+        get: operations["get-session-actions"];
+        put?: never;
+        /**
+         * Generate Actions
+         * @description Enqueue post-visit action-item generation for an owned session (explicit regenerate, phase 09).
+         *
+         *     Async ensure-semantics identical to codes/summary: derives the idempotency identity from the
+         *     canonical transcript + latest note (no request body), idempotently enqueues a ``scribe.generations``
+         *     job (``artifact_kind='actions'``), and returns 202 with the job envelope or 200 with the artifact
+         *     when an identical job already succeeded. Actions are also auto-enqueued server-side when the note job
+         *     succeeds. Rejected once the session is terminal (409 ``invalid_session_state``, post-finalize).
+         */
+        post: operations["generate-session-actions"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/{workspace_id}/sessions/{session_id}/allocate": {
         parameters: {
             query?: never;
@@ -146,6 +176,31 @@ export interface paths {
          *     fresh GameServer, and the WS attach re-verifies ownership.
          */
         post: operations["allocate-session"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/{workspace_id}/sessions/{session_id}/ask": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ask Session
+         * @description Streaming Q&A over the session transcript + latest note (SPEC §3.3, header-auth fetch streaming).
+         *
+         *     Not persisted as an artifact — only a provenance row is recorded (its id is the `generation_id` in
+         *     the terminal `done` frame). Reuses `generation.py`'s provider clients + circuit breakers. Allowed on
+         *     a terminal session (post-visit Q&A is read-only; the post-finalize immutability guard applies only
+         *     to regenerate-section + actions generation).
+         */
+        post: operations["ask-session"];
         delete?: never;
         options?: never;
         head?: never;
@@ -199,6 +254,32 @@ export interface paths {
          *     once the session is terminal. Auto-check state (phase 09) is written server-side, never here.
          */
         patch: operations["update-session-checklist"];
+        trace?: never;
+    };
+    "/v1/{workspace_id}/sessions/{session_id}/checklist/auto-check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Auto Check Checklist
+         * @description LLM auto-check of the generated checklist against the (partial) transcript mid-session (phase 09).
+         *
+         *     Evaluates each generated checklist item against the best-available transcript and returns a per-item
+         *     `matched` verdict; matched items are persisted as `source='auto'` checklist state that COEXISTS with
+         *     manual `PATCH /checklist` toggles — the upsert preserves any manually-decided item and never
+         *     clobbers it. Throttling is client-side by contract; the server relies on the provider circuit
+         *     breakers. No generated checklist yet (or no transcript) → an empty `{matches:[]}`.
+         */
+        post: operations["auto-check-session-checklist"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/v1/{workspace_id}/sessions/{session_id}/codes": {
@@ -349,6 +430,33 @@ export interface paths {
          *     note submit is rolled back with it (the two writes are one unit of work).
          */
         post: operations["finalize-session-note"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/{workspace_id}/sessions/{session_id}/note/regenerate-section": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Regenerate Note Section
+         * @description Regenerate a single section of the note as a new version (async ensure-semantics, phase 09).
+         *
+         *     Reuses the phase-08 note `version` for optimistic concurrency: a stale `base_version` (a manual edit
+         *     or another regen landed since the client read) is rejected up front with 409 version_conflict, and
+         *     the worker re-checks it under a compare-and-set at persist time so a race can never clobber a newer
+         *     note. Enqueues an `artifact_kind='note'` job whose params carry `section_id`/`base_version`; the
+         *     worker rewrites that section and persists `base_version + 1`. Returns 202 with the job envelope.
+         *     Rejected once the session is terminal (409 invalid_session_state, post-finalize immutability).
+         */
+        post: operations["regenerate-session-note-section"];
         delete?: never;
         options?: never;
         head?: never;
@@ -586,6 +694,34 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** ActionItemResponse */
+        ActionItemResponse: {
+            /** Id */
+            id: string;
+            /** Kind */
+            kind: string;
+            /** Text */
+            text: string;
+        };
+        /** ActionsReadResponse */
+        ActionsReadResponse: {
+            error?: components["schemas"]["ErrorDetail"] | null;
+            generation_status: components["schemas"]["GenerationReadStatus"];
+            /** Items */
+            items?: components["schemas"]["ActionItemResponse"][] | null;
+            /** Session Id */
+            session_id?: string | null;
+        };
+        /** ActionsResponse */
+        ActionsResponse: {
+            /** Items */
+            items: components["schemas"]["ActionItemResponse"][];
+            /**
+             * Session Id
+             * Format: uuid
+             */
+            session_id: string;
+        };
         /** AllocateResponse */
         AllocateResponse: {
             /**
@@ -685,7 +821,50 @@ export interface components {
             transcript: components["schemas"]["ArtifactAvailability"];
         };
         /** @enum {string} */
-        ArtifactKind: "note" | "summary" | "checklist" | "codes";
+        ArtifactKind: "note" | "summary" | "checklist" | "codes" | "actions";
+        /** AskHistoryMessage */
+        AskHistoryMessage: {
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "user" | "assistant";
+            /** Text */
+            text: string;
+        };
+        /**
+         * AskRequest
+         * @description Body of `POST /sessions/{id}/ask` — a streaming Q&A over the transcript + latest note.
+         *
+         *     The answer streams back as SSE `delta {text}` frames then a terminal `done {generation_id}`; the
+         *     response is not persisted as an artifact (only a provenance row is recorded).
+         */
+        AskRequest: {
+            /** History */
+            history?: components["schemas"]["AskHistoryMessage"][];
+            /** Question */
+            question: string;
+        };
+        /** AutoCheckMatch */
+        AutoCheckMatch: {
+            /** Evidence */
+            evidence?: string | null;
+            /** Item Id */
+            item_id: string;
+            /** Matched */
+            matched: boolean;
+        };
+        /**
+         * AutoCheckResponse
+         * @description 200 body of `POST /sessions/{id}/checklist/auto-check`: the LLM's per-item match verdict.
+         *
+         *     Matched items are also persisted server-side as `source='auto'` checklist state (coexisting with,
+         *     and never clobbering, manual `PATCH /checklist` toggles).
+         */
+        AutoCheckResponse: {
+            /** Matches */
+            matches: components["schemas"]["AutoCheckMatch"][];
+        };
         /**
          * BotStatusEvent
          * @description `bot_status` SSE frame payload: the Zoom capture bot's lifecycle state (+ optional reason).
@@ -970,6 +1149,11 @@ export interface components {
              */
             note_type: "full" | "medical" | "soap" | "dap" | "birp" | "amd-psych-intake" | "amd-psych-progress" | "amd-therapy-intake" | "amd-therapy-progress";
         };
+        /** GeneratedActionsResponse */
+        GeneratedActionsResponse: {
+            actions: components["schemas"]["ActionsResponse"];
+            generation: components["schemas"]["GenerationMetadata"];
+        };
         /** GeneratedChecklistResponse */
         GeneratedChecklistResponse: {
             checklist: components["schemas"]["ChecklistResponse"];
@@ -1097,6 +1281,21 @@ export interface components {
             updated_at: string;
             /** Version */
             version: number;
+        };
+        /**
+         * RegenerateSectionRequest
+         * @description Body of `POST /sessions/{id}/note/regenerate-section` (SPEC §6.1 P4).
+         *
+         *     Regenerates a single named section of the current note. `base_version` is the note version the
+         *     client last read; a stale value returns 409 version_conflict (never clobbers a racing manual edit).
+         */
+        RegenerateSectionRequest: {
+            /** Base Version */
+            base_version: number;
+            /** Instructions */
+            instructions?: string | null;
+            /** Section Id */
+            section_id: string;
         };
         /** SessionListResponse */
         SessionListResponse: {
@@ -1918,6 +2117,169 @@ export interface operations {
             };
         };
     };
+    "get-session-actions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActionsReadResponse"];
+                };
+            };
+            /** @description Bearer token is absent or invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The principal is outside this workspace or provider scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No provider-owned resource exists at this URL. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Generation cannot proceed for the current session state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request validation failed. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Clinical generation is temporarily unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    "generate-session-actions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description An identical job already succeeded; the actions are returned. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeneratedActionsResponse"];
+                };
+            };
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeneratedActionsResponse"] | components["schemas"]["GenerationEnqueueResponse"];
+                };
+            };
+            /** @description Bearer token is absent or invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The principal is outside this workspace or provider scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No provider-owned resource exists at this URL. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Generation cannot proceed for the current session state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request validation failed. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Clinical generation is temporarily unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     "allocate-session": {
         parameters: {
             query?: never;
@@ -1989,6 +2351,79 @@ export interface operations {
                 headers: {
                     /** @description Seconds to wait before retrying (retryable capacity signal). */
                     "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    "ask-session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AskRequest"];
+            };
+        };
+        responses: {
+            /** @description A Server-Sent Event stream (header-authenticated `fetch` streaming, not `EventSource`): one or more `delta` frames each `{text}`, then a terminal `done` frame `{generation_id}`; a `ping` keepalive every 15 s, and an `error` frame if generation fails mid-stream. Each frame is `event: <event>\ndata: <json>\n\n`. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                    "text/event-stream": string;
+                };
+            };
+            /** @description Bearer token is absent or invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The principal is outside this workspace or provider scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No provider-owned resource exists at this URL. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Clinical generation is temporarily unavailable. */
+            503: {
+                headers: {
                     [name: string]: unknown;
                 };
                 content: {
@@ -2255,6 +2690,74 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ChecklistStateResponse"];
+                };
+            };
+            /** @description Bearer token is absent or invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The principal is outside this workspace or provider scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No provider-owned resource exists at this URL. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The session is terminal and no longer accepts mutations (`invalid_session_state`). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request validation failed. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    "auto-check-session-checklist": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutoCheckResponse"];
                 };
             };
             /** @description Bearer token is absent or invalid. */
@@ -2971,6 +3474,78 @@ export interface operations {
                 };
             };
             /** @description A required AMD/template field is missing on the stored note (`finalize_validation_failed`). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    "regenerate-session-note-section": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegenerateSectionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenerationEnqueueResponse"];
+                };
+            };
+            /** @description Bearer token is absent or invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The principal is outside this workspace or provider scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No provider-owned resource exists at this URL. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The base_version is stale (`version_conflict`) or the session is terminal (`invalid_session_state`). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request validation failed. */
             422: {
                 headers: {
                     [name: string]: unknown;

@@ -30,6 +30,17 @@ Retry-After`), get-transcript, and the artifact read/generate/finalize
    (`ScribeServerClient.prepareConnection` → `ScribeStreamClient.connect()` →
    synthetic PCM16 → acks/pong → `end()`). **Phase 15**; the WS streaming/audio
    round-trip is NOT duplicated by the resource-API suites.
+5. **`scribe-post-visit-mutations.e2e.test.ts`** — the GA `0.4.0` post-visit
+   mutation contract, driven through the raw `ScribeClient` with a REAL provider
+   JWT (`SCRIBE_E2E_TOKEN`): real-speech stream → note generate/read →
+   `putNote` (+ stale 409) → `patchChecklist` → `patchCode` → `finalizeNote`
+   (+ post-finalize 409). **Token-gated** (self-skips without `SCRIBE_E2E_TOKEN`).
+6. **`scribe-assist.e2e.test.ts`** — the phase-09 assist surface (`0.5.0`), same
+   real-speech + provider-JWT setup: `generateActions` job → `getActions` ready
+   `{items}`; `regenerateSection({base_version})` 202 + a stale `base_version`
+   409 `version_conflict`; `autoCheckChecklist` → `200 {matches}`; and the `/ask`
+   SSE helper (`client.askSession`) streaming ≥1 `delta` then a terminal
+   `done {generation_id}`. **Token-gated** (self-skips without `SCRIBE_E2E_TOKEN`).
 
 All **run in CI** on pushes to `main` and same-repo PRs (see
 `.github/workflows/ci.yml` `e2e` job). All are **gated**: they self-skip when
