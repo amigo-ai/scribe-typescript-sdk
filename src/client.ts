@@ -115,11 +115,17 @@ export class ScribeClient {
   }
 
   /**
-   * Create a new scribe session.
+   * Create a new **in-person** scribe session.
    *
    * `POST /v1/{workspace_id}/sessions` → 201. Requires `scribe:sessions:write`.
    * Reusing an `external_id` you already own returns the existing session
    * (idempotent); a different provider's `external_id` yields a 409.
+   *
+   * This endpoint is in-person only. To create a **Zoom** session use
+   * {@link ScribeClient.createZoomSession} (POST /zoom/sessions), which runs the
+   * saga that dispatches the bot. A non-in-person `mode` is rejected server-side
+   * with a {@link ValidationError} (422, `errorCode: 'use_zoom_endpoint'`); the
+   * `mode` type is narrowed to `'in_person'` so this is also a compile-time error.
    */
   async createSession(
     input: CreateSessionRequest = {},

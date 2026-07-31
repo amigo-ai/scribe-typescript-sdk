@@ -1088,8 +1088,11 @@ export interface components {
             metadata?: {
                 [key: string]: unknown;
             };
-            /** @default in_person */
-            mode: components["schemas"]["SessionMode"];
+            /**
+             * @default in_person
+             * @enum {string}
+             */
+            mode: "in_person";
         };
         /** ErrorDetail */
         ErrorDetail: {
@@ -1948,7 +1951,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description external_id is already in use by another provider (`conflict`), was reused with a different fingerprint (`idempotency_key_conflict`), or the practitioner already has an active Zoom session (`active_zoom_session_exists`). */
+            /** @description external_id is already in use by another provider (`conflict`), or was reused with a different fingerprint (`idempotency_key_conflict`). */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -1957,7 +1960,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Request validation failed. */
+            /** @description Request validation failed (`validation_error`), or a non-in-person `mode` was requested (`use_zoom_endpoint`) — the generic create is in-person only; create a Zoom session via POST /v1/{workspace_id}/zoom/sessions. */
             422: {
                 headers: {
                     [name: string]: unknown;

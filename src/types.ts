@@ -31,12 +31,15 @@ export type ArtifactAvailabilityResponse = Schemas['ArtifactAvailabilityResponse
  * Reusing an `external_id` already owned by the same provider is idempotent; a
  * different provider in the same workspace gets a 409 ({@link ConflictError}).
  *
- * `mode` is narrowed to optional here: the generated schema marks it required
- * because it carries a server-side default (`in_person`), but callers may omit
- * it (the server applies the default). Pass `mode: 'zoom'` for a Zoom session.
+ * The generic create is **in-person only**. `mode` is narrowed to `'in_person'`
+ * and made optional here: the generated schema marks it required because it
+ * carries a server-side default (`in_person`), but callers may omit it (the
+ * server applies the default). To create a **Zoom** session use
+ * {@link ScribeClient.createZoomSession} (POST /zoom/sessions) — a non-in-person
+ * `mode` on this endpoint is rejected with a `use_zoom_endpoint` 422 error.
  */
 export type CreateSessionRequest = Omit<Schemas['CreateSessionRequest'], 'mode'> & {
-  mode?: SessionMode
+  mode?: 'in_person'
 }
 
 /**
