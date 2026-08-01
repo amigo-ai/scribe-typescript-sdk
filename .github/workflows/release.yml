@@ -99,7 +99,7 @@ jobs:
           EOF
 
           if grep -Eq '^[[:alnum:]-]+(\([^)]*\))?!:' "$RUNNER_TEMP/release-subjects.txt" || \
-            grep -Eq '^BREAKING CHANGE:' "$RUNNER_TEMP/release-bodies.txt"; then
+            grep -Eq '^BREAKING[ -]CHANGE:' "$RUNNER_TEMP/release-bodies.txt"; then
             MAJOR=$((MAJOR + 1))
             MINOR=0
             PATCH=0
@@ -169,7 +169,9 @@ jobs:
       always() &&
       (github.event_name == 'release' ||
       github.event_name == 'workflow_dispatch' ||
-      needs.create-release.outputs.tag_name != '')
+      (github.event_name == 'push' &&
+      needs.create-release.result == 'success' &&
+      needs.create-release.outputs.tag_name != ''))
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
