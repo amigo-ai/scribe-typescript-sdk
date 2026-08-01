@@ -8,6 +8,7 @@ import {
   NotFoundError,
   PermissionError,
   ServiceUnavailableError,
+  ValidationError,
 } from '../src/errors'
 import { mockFetch, rejectingFetch } from './test-helpers'
 
@@ -88,6 +89,25 @@ describe('createSession', () => {
   it('maps 401 to AuthenticationError', async () => {
     const { fetch } = mockFetch([{ status: 401, body: { message: 'bad token' } }])
     await expect(client(fetch).createSession()).rejects.toBeInstanceOf(AuthenticationError)
+  })
+
+  it('maps a 422 use_zoom_endpoint rejection to ValidationError carrying the errorCode', async () => {
+    // The generic create is in-person only; the server rejects a zoom-mode request with a typed
+    // 422. Zoom sessions must go through createZoomSession / POST /zoom/sessions.
+    const { fetch } = mockFetch([
+      {
+        status: 422,
+        body: {
+          code: 'use_zoom_endpoint',
+          message: 'Zoom sessions must be created via POST /v1/{workspace_id}/zoom/sessions',
+        },
+      },
+    ])
+    const err = await client(fetch)
+      .createSession({ external_id: 'appt-9' })
+      .catch(e => e)
+    expect(err).toBeInstanceOf(ValidationError)
+    expect(err.errorCode).toBe('use_zoom_endpoint')
   })
 })
 

@@ -1053,8 +1053,11 @@
             "type": "object"
           },
           "mode": {
-            "$ref": "#/components/schemas/SessionMode",
-            "default": "in_person"
+            "default": "in_person",
+            "enum": [
+              "in_person"
+            ],
+            "type": "string"
           }
         },
         "title": "CreateSessionRequest",
@@ -2806,7 +2809,7 @@
                 }
               }
             },
-            "description": "external_id is already in use by another provider (`conflict`), was reused with a different fingerprint (`idempotency_key_conflict`), or the practitioner already has an active Zoom session (`active_zoom_session_exists`)."
+            "description": "external_id is already in use by another provider (`conflict`), or was reused with a different fingerprint (`idempotency_key_conflict`)."
           },
           "422": {
             "content": {
@@ -2816,7 +2819,7 @@
                 }
               }
             },
-            "description": "Request validation failed."
+            "description": "Request validation failed (`validation_error`), or a non-in-person `mode` was requested (`use_zoom_endpoint`) — the generic create is in-person only; create a Zoom session via POST /v1/{workspace_id}/zoom/sessions."
           }
         },
         "summary": "Create Session",
