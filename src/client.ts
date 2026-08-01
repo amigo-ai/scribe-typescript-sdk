@@ -16,7 +16,6 @@ import type {
   AppointmentResponse,
   AskHistoryMessage,
   AutoCheckResponse,
-  ChecklistGenerationResult,
   ChecklistReadResponse,
   ChecklistStateResponse,
   CodeDecisionRequest,
@@ -26,7 +25,6 @@ import type {
   CreateSessionRequest,
   FinalizeNoteRequest,
   FinalizeNoteResponse,
-  GenerateChecklistRequest,
   GenerateNoteRequest,
   GenerationEnqueueResponse,
   ListAppointmentsParams,
@@ -347,6 +345,13 @@ export class ScribeClient {
    * {@link ZoomSessionResponse} plus the dispatched `bot_id`. `409`
    * ({@link ConflictError}) when the provider is not connected to Zoom or the
    * `external_id` collides; `503` when the control plane is unavailable.
+   *
+   * The optional session-owned note-generation fields — `first_name`,
+   * `last_name`, `visit_type` (a {@link VisitType}) and `note_template` (a
+   * {@link NoteTemplate}) — feed downstream note generation + checklist seeding
+   * server-side, mirroring {@link ScribeClient.createSession}. Omitting them is
+   * backward-compatible; they can also be set later via
+   * {@link ScribeClient.updateSession}.
    */
   async createZoomSession(
     input: ZoomSessionRequest,
@@ -687,33 +692,6 @@ export class ScribeClient {
     return this.http.request<ChecklistReadResponse>({
       method: 'GET',
       path: `/v1/${workspaceId}/sessions/${encodeURIComponent(sessionId)}/checklist`,
-      signal: options?.signal,
-      timeoutMs: options?.timeoutMs,
-    })
-  }
-
-  /**
-   * Generate the checklist for a session.
-   *
-   * `POST /v1/{workspace_id}/sessions/{session_id}/checklist` → 200 (synchronous
-   * artifact) or 202 (async job enqueued). Requires `scribe:sessions:write`. The
-   * request body's `items` are required (an optional `title` may be supplied).
-   * Returns {@link ChecklistGenerationResult} — narrow with
-   * {@link isGenerationEnqueued} to poll {@link ScribeClient.getChecklist}.
-   */
-  async generateChecklist(
-    sessionId: string,
-    input: GenerateChecklistRequest,
-    options?: CallOptions
-  ): Promise<ChecklistGenerationResult> {
-    const workspaceId = this.resolveWorkspaceId(options)
-    if (!sessionId) {
-      throw new ConfigurationError('sessionId is required', 'sessionId')
-    }
-    return this.http.request<ChecklistGenerationResult>({
-      method: 'POST',
-      path: `/v1/${workspaceId}/sessions/${encodeURIComponent(sessionId)}/checklist`,
-      body: input,
       signal: options?.signal,
       timeoutMs: options?.timeoutMs,
     })

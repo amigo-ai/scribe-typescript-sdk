@@ -158,14 +158,9 @@ describe.runIf(hasCreds)('Scribe session lifecycle e2e (real happy-path artifact
         // 3. stream some audio
         await streamAudio(stream, 2_000)
 
-        // 4. generate a checklist mid-session
-        await generateChecklistTolerant(client, session.id)
-
-        // 5. stream more audio
+        // 4. stream more audio (checklist generation is server-side now — the
+        //    explicit generate-checklist endpoint was retired in 0.7.0)
         await streamAudio(stream, 2_000)
-
-        // 6. generate a checklist again
-        await generateChecklistTolerant(client, session.id)
       }
     } finally {
       // 7. end the stream
@@ -234,26 +229,6 @@ describe.runIf(hasCreds)('Scribe session lifecycle e2e (real happy-path artifact
     )
   }, 180_000)
 })
-
-async function generateChecklistTolerant(client: ScribeClient, sessionId: string): Promise<void> {
-  try {
-    const v = await client.generateChecklist(sessionId, {
-      title: 'sdk-e2e visit checklist',
-      items: [
-        { id: 'a', label: 'Chief complaint documented' },
-        { id: 'b', label: 'Vitals recorded' },
-      ],
-    })
-    if (!isGenerationEnqueued(v)) {
-      expect(v.checklist).toBeTruthy()
-      expect(Array.isArray(v.checklist.items)).toBe(true)
-    }
-    // eslint-disable-next-line no-console
-    console.warn('[lifecycle e2e] generateChecklist: generated')
-  } catch (err) {
-    logGenerateOutcome('generateChecklist', err)
-  }
-}
 
 async function generateNoteTolerant(client: ScribeClient, sessionId: string): Promise<void> {
   try {

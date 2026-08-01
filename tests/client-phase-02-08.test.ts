@@ -53,6 +53,50 @@ describe('createZoomSession', () => {
     })
   })
 
+  it('serializes the note-gen fields (first/last name, visit type, note template) into the body', async () => {
+    const body = { session: { id: 'sess-z' }, bot_id: 'bot-9' }
+    const { fetch, calls } = mockFetch([{ status: 201, body }])
+    await client(fetch).createZoomSession({
+      meeting_link: 'https://zoom.us/j/123',
+      disclosure: { enabled: true },
+      first_name: 'Ada',
+      last_name: 'Lovelace',
+      visit_type: 'psych-intake',
+      note_template: 'amd-psych-intake',
+    })
+
+    expect(JSON.parse(String(calls[0]!.init?.body))).toEqual({
+      meeting_link: 'https://zoom.us/j/123',
+      disclosure: { enabled: true },
+      first_name: 'Ada',
+      last_name: 'Lovelace',
+      visit_type: 'psych-intake',
+      note_template: 'amd-psych-intake',
+    })
+  })
+
+  it('accepts explicit nulls for the note-gen fields', async () => {
+    const body = { session: { id: 'sess-z' }, bot_id: 'bot-9' }
+    const { fetch, calls } = mockFetch([{ status: 201, body }])
+    await client(fetch).createZoomSession({
+      meeting_link: 'https://zoom.us/j/123',
+      disclosure: { enabled: true },
+      first_name: null,
+      last_name: null,
+      visit_type: null,
+      note_template: null,
+    })
+
+    expect(JSON.parse(String(calls[0]!.init?.body))).toEqual({
+      meeting_link: 'https://zoom.us/j/123',
+      disclosure: { enabled: true },
+      first_name: null,
+      last_name: null,
+      visit_type: null,
+      note_template: null,
+    })
+  })
+
   it('maps 409 (not connected / external_id collision) to ConflictError', async () => {
     const { fetch } = mockFetch([{ status: 409, body: { code: 'zoom_not_connected' } }])
     await expect(
