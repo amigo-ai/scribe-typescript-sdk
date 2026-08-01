@@ -1084,6 +1084,10 @@ export interface components {
             external_appointment_id?: string | null;
             /** External Id */
             external_id?: string | null;
+            /** First Name */
+            first_name?: string | null;
+            /** Last Name */
+            last_name?: string | null;
             /** Metadata */
             metadata?: {
                 [key: string]: unknown;
@@ -1093,6 +1097,9 @@ export interface components {
              * @enum {string}
              */
             mode: "in_person";
+            note_template?: components["schemas"]["NoteTemplate"] | null;
+            /** Visit Type */
+            visit_type?: string | null;
         };
         /** ErrorDetail */
         ErrorDetail: {
@@ -1285,6 +1292,8 @@ export interface components {
             /** Version */
             version: number;
         };
+        /** @enum {string} */
+        NoteTemplate: "full" | "medical" | "soap" | "dap" | "birp" | "amd-psych-intake" | "amd-psych-progress" | "amd-therapy-intake" | "amd-therapy-progress";
         /**
          * RegenerateSectionRequest
          * @description Body of `POST /sessions/{id}/note/regenerate-section` (SPEC §6.1 P4).
@@ -1327,12 +1336,17 @@ export interface components {
             ended_at: string | null;
             /** External Appointment Id */
             external_appointment_id?: string | null;
+            /** First Name */
+            first_name?: string | null;
             /**
              * Id
              * Format: uuid
              */
             id: string;
+            /** Last Name */
+            last_name?: string | null;
             mode: components["schemas"]["SessionMode"];
+            note_template?: components["schemas"]["NoteTemplate"] | null;
             /** Started At */
             started_at: string | null;
             status: components["schemas"]["SessionStatus"];
@@ -1341,6 +1355,8 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+            /** Visit Type */
+            visit_type?: string | null;
         };
         /**
          * SessionStatus
@@ -1483,11 +1499,18 @@ export interface components {
         UpdateSessionRequest: {
             /** External Appointment Id */
             external_appointment_id?: string | null;
+            /** First Name */
+            first_name?: string | null;
+            /** Last Name */
+            last_name?: string | null;
             /** Metadata */
             metadata?: {
                 [key: string]: unknown;
             } | null;
             mode?: components["schemas"]["SessionMode"] | null;
+            note_template?: components["schemas"]["NoteTemplate"] | null;
+            /** Visit Type */
+            visit_type?: string | null;
         };
         /** ValidationError */
         ValidationError: {
