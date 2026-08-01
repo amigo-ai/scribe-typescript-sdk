@@ -10,6 +10,7 @@ import {
   ServiceUnavailableError,
   ValidationError,
 } from '../src/errors'
+import type { CreateSessionRequest, NoteTemplate, UpdateSessionRequest } from '../src/types'
 import { mockFetch, rejectingFetch } from './test-helpers'
 
 const BASE = 'https://api.example.test'
@@ -77,6 +78,42 @@ describe('createSession', () => {
     const { fetch, calls } = mockFetch([{ status: 201, body: { id: 'x' } }])
     await client(fetch).createSession()
     expect(JSON.parse(String(calls[0]!.init?.body))).toEqual({})
+  })
+
+  it('serializes the session note-gen fields (first/last name, visit type, note template)', async () => {
+    const { fetch, calls } = mockFetch([{ status: 201, body: { id: 'sess-1' } }])
+    const input: CreateSessionRequest = {
+      first_name: 'Ada',
+      last_name: 'Lovelace',
+      visit_type: 'annual physical',
+      note_template: 'soap',
+    }
+    await client(fetch).createSession(input)
+    expect(JSON.parse(String(calls[0]!.init?.body))).toEqual({
+      first_name: 'Ada',
+      last_name: 'Lovelace',
+      visit_type: 'annual physical',
+      note_template: 'soap',
+    })
+  })
+
+  it('accepts every NoteTemplate enum value on create', async () => {
+    const templates: NoteTemplate[] = [
+      'full',
+      'medical',
+      'soap',
+      'dap',
+      'birp',
+      'amd-psych-intake',
+      'amd-psych-progress',
+      'amd-therapy-intake',
+      'amd-therapy-progress',
+    ]
+    for (const note_template of templates) {
+      const { fetch, calls } = mockFetch([{ status: 201, body: { id: 'sess-1' } }])
+      await client(fetch).createSession({ note_template })
+      expect(JSON.parse(String(calls[0]!.init?.body))).toEqual({ note_template })
+    }
   })
 
   it('maps 409 to ConflictError', async () => {
@@ -572,6 +609,39 @@ describe('updateSession', () => {
     const { fetch, calls } = mockFetch([{ status: 200, body: { id: 'sess-1' } }])
     await client(fetch).updateSession('sess-1', { external_appointment_id: null })
     expect(JSON.parse(String(calls[0]!.init?.body))).toEqual({ external_appointment_id: null })
+  })
+
+  it('patches the session note-gen fields (first/last name, visit type, note template)', async () => {
+    const { fetch, calls } = mockFetch([{ status: 200, body: { id: 'sess-1' } }])
+    const patch: UpdateSessionRequest = {
+      first_name: 'Grace',
+      last_name: 'Hopper',
+      visit_type: 'follow-up',
+      note_template: 'medical',
+    }
+    await client(fetch).updateSession('sess-1', patch)
+    expect(JSON.parse(String(calls[0]!.init?.body))).toEqual({
+      first_name: 'Grace',
+      last_name: 'Hopper',
+      visit_type: 'follow-up',
+      note_template: 'medical',
+    })
+  })
+
+  it('serializes explicit nulls for the note-gen fields (clears them)', async () => {
+    const { fetch, calls } = mockFetch([{ status: 200, body: { id: 'sess-1' } }])
+    await client(fetch).updateSession('sess-1', {
+      first_name: null,
+      last_name: null,
+      visit_type: null,
+      note_template: null,
+    })
+    expect(JSON.parse(String(calls[0]!.init?.body))).toEqual({
+      first_name: null,
+      last_name: null,
+      visit_type: null,
+      note_template: null,
+    })
   })
 
   it('url-encodes the session id', async () => {

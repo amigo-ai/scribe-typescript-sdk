@@ -1047,6 +1047,30 @@
             ],
             "title": "External Id"
           },
+          "first_name": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Name"
+          },
+          "last_name": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Name"
+          },
           "metadata": {
             "additionalProperties": true,
             "title": "Metadata",
@@ -1058,6 +1082,28 @@
               "in_person"
             ],
             "type": "string"
+          },
+          "note_template": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NoteTemplate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "visit_type": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visit Type"
           }
         },
         "title": "CreateSessionRequest",
@@ -1608,6 +1654,20 @@
         "title": "NoteResponse",
         "type": "object"
       },
+      "NoteTemplate": {
+        "enum": [
+          "full",
+          "medical",
+          "soap",
+          "dap",
+          "birp",
+          "amd-psych-intake",
+          "amd-psych-progress",
+          "amd-therapy-intake",
+          "amd-therapy-progress"
+        ],
+        "type": "string"
+      },
       "RegenerateSectionRequest": {
         "description": "Body of `POST /sessions/{id}/note/regenerate-section` (SPEC §6.1 P4).\n\nRegenerates a single named section of the current note. `base_version` is the note version the\nclient last read; a stale value returns 409 version_conflict (never clobbers a racing manual edit).",
         "properties": {
@@ -1709,13 +1769,47 @@
             ],
             "title": "External Appointment Id"
           },
+          "first_name": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Name"
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
             "type": "string"
           },
+          "last_name": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Name"
+          },
           "mode": {
             "$ref": "#/components/schemas/SessionMode"
+          },
+          "note_template": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NoteTemplate"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "started_at": {
             "anyOf": [
@@ -1736,6 +1830,18 @@
             "format": "date-time",
             "title": "Updated At",
             "type": "string"
+          },
+          "visit_type": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visit Type"
           }
         },
         "required": [
@@ -2081,6 +2187,30 @@
             ],
             "title": "External Appointment Id"
           },
+          "first_name": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Name"
+          },
+          "last_name": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Name"
+          },
           "metadata": {
             "anyOf": [
               {
@@ -2102,6 +2232,28 @@
                 "type": "null"
               }
             ]
+          },
+          "note_template": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NoteTemplate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "visit_type": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visit Type"
           }
         },
         "title": "UpdateSessionRequest",
