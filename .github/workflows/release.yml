@@ -1,9 +1,10 @@
+# yamllint disable-line rule:truthy
 name: Release
 
-# Publishes @amigo-ai/scribe-typescript-sdk to npm. Mirrors amigo-platform-typescript-sdk's
-# publish arrangement: versioning is a manual, separate step (bump package.json,
-# tag v<major>.<minor>.<patch>, and cut a GitHub Release); THIS workflow only
-# validates + publishes the tagged commit.
+# Source changes on main are released without a third-party release action. The
+# workflow derives the next SemVer version from Conventional Commits since the
+# latest v* tag, creates a tag-only version commit, generates GitHub release
+# notes for that commit range, then validates and publishes the tagged package.
 #
 # Auth: npm TRUSTED PUBLISHING (OIDC) is the ONLY publish mechanism — there is
 # no npm token. `npm publish` authenticates via the workflow's `id-token: write`
@@ -15,10 +16,14 @@ name: Release
 # (amigo-ai/scribe-typescript-sdk) and workflow (`.github/workflows/release.yml`).
 # The repository must be PUBLIC for OIDC provenance + trusted publishing.
 #
-# Trigger: a published GitHub Release (preferred) or a manual workflow_dispatch
-# from a v* tag ref. The version in package.json must equal the tag.
+# Manual publishing from a v* tag and externally-created GitHub Releases remain
+# available as recovery paths. The version in package.json must equal the tag.
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
   workflow_dispatch:
     inputs:
       expected_version:
@@ -28,20 +33,150 @@ on:
   release:
     types: [published]
 
-permissions:
-  contents: read
-  id-token: write # required for npm trusted publishing (OIDC) + provenance
-  issues: write # open a tracked issue if the npm publish fails
+permissions: {}
 
 concurrency:
   group: release-${{ github.event.release.tag_name || github.ref_name || github.run_id }}
   cancel-in-progress: false
 
 jobs:
+  create-release:
+    name: Create release tag and notes
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      tag_name: ${{ steps.version.outputs.tag }}
+    steps:
+      - name: Checkout source commit
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
+        with:
+          node-version: '24'
+
+      - name: Determine next version
+        id: version
+        run: |
+          LATEST_TAG=$(git tag --list 'v[0-9]*' --sort=-v:refname | grep -Em1 '^v[0-9]+\.[0-9]+\.[0-9]+$' || true)
+
+          if [ -n "$LATEST_TAG" ] && \
+            [ "$(git log -1 --format='%s' "$LATEST_TAG")" = "chore(release): ${LATEST_TAG}" ] && \
+            [ "$(git rev-parse "${LATEST_TAG}^")" = "$(git rev-parse HEAD)" ]; then
+            PREVIOUS_TAG=$(git tag --list 'v[0-9]*' --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sed -n '2p')
+            {
+              echo "previous_tag=$PREVIOUS_TAG"
+              echo "reuse_tag=true"
+              echo "tag=$LATEST_TAG"
+              echo "version=${LATEST_TAG#v}"
+            } >> "$GITHUB_OUTPUT"
+            echo "Reusing ${LATEST_TAG}; it already represents this source commit."
+            exit 0
+          fi
+
+          if [ -n "$LATEST_TAG" ]; then
+            CURRENT_VERSION="${LATEST_TAG#v}"
+            COMMIT_RANGE="${LATEST_TAG}..HEAD"
+          else
+            CURRENT_VERSION=$(node -p "require('./package.json').version")
+            COMMIT_RANGE="HEAD"
+          fi
+
+          if [ "$(git rev-list --count "$COMMIT_RANGE")" -eq 0 ]; then
+            echo "::error::No commits found after ${LATEST_TAG:-the initial repository state}."
+            exit 1
+          fi
+
+          git log "$COMMIT_RANGE" --format='%s' > "$RUNNER_TEMP/release-subjects.txt"
+          git log "$COMMIT_RANGE" --format='%b' > "$RUNNER_TEMP/release-bodies.txt"
+
+          IFS=. read -r MAJOR MINOR PATCH <<EOF
+          $CURRENT_VERSION
+          EOF
+
+          if grep -Eq '^[[:alnum:]-]+(\([^)]*\))?!:' "$RUNNER_TEMP/release-subjects.txt" || \
+            grep -Eq '^BREAKING[ -]CHANGE:' "$RUNNER_TEMP/release-bodies.txt"; then
+            MAJOR=$((MAJOR + 1))
+            MINOR=0
+            PATCH=0
+          elif grep -Eq '^feat(\([^)]*\))?:' "$RUNNER_TEMP/release-subjects.txt"; then
+            MINOR=$((MINOR + 1))
+            PATCH=0
+          else
+            PATCH=$((PATCH + 1))
+          fi
+
+          VERSION="${MAJOR}.${MINOR}.${PATCH}"
+          TAG="v${VERSION}"
+
+          if git rev-parse --verify --quiet "refs/tags/$TAG"; then
+            echo "::error::Release tag ${TAG} already exists."
+            exit 1
+          fi
+
+          {
+            echo "previous_tag=$LATEST_TAG"
+            echo "reuse_tag=false"
+            echo "tag=$TAG"
+            echo "version=$VERSION"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create and push release tag
+        env:
+          REUSE_TAG: ${{ steps.version.outputs.reuse_tag }}
+          VERSION: ${{ steps.version.outputs.version }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          if [ "$REUSE_TAG" = "true" ]; then
+            echo "${TAG} already points to the generated version commit; reusing it."
+            exit 0
+          fi
+
+          npm version "$VERSION" --no-git-tag-version --ignore-scripts
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json package-lock.json
+          git commit -m "chore(release): ${TAG}"
+          git tag --annotate "$TAG" --message "Release ${TAG}"
+          git push origin "$TAG"
+
+      - name: Generate release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PREVIOUS_TAG: ${{ steps.version.outputs.previous_tag }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            echo "GitHub Release ${TAG} already exists; reusing it."
+            exit 0
+          fi
+
+          RELEASE_ARGS=(release create "$TAG" --verify-tag --title "$TAG" --generate-notes)
+          if [ -n "$PREVIOUS_TAG" ]; then
+            RELEASE_ARGS+=(--notes-start-tag "$PREVIOUS_TAG")
+          fi
+          gh "${RELEASE_ARGS[@]}"
+
   publish:
     name: Publish package to npm
+    needs: create-release
+    if: >-
+      always() &&
+      (github.event_name == 'release' ||
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' &&
+      needs.create-release.result == 'success' &&
+      needs.create-release.outputs.tag_name != ''))
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write # required for npm trusted publishing (OIDC) + provenance
 
     steps:
       - name: Resolve release tag
@@ -52,8 +187,11 @@ jobs:
           REF_TYPE: ${{ github.ref_type }}
           REF_NAME: ${{ github.ref_name }}
           EXPECTED_VERSION: ${{ inputs.expected_version }}
+          AUTOMATED_TAG: ${{ needs.create-release.outputs.tag_name }}
         run: |
-          if [ "$EVENT_NAME" = "release" ]; then
+          if [ "$EVENT_NAME" = "push" ]; then
+            TAG="$AUTOMATED_TAG"
+          elif [ "$EVENT_NAME" = "release" ]; then
             TAG="$RELEASE_TAG"
           elif [ "$REF_TYPE" = "tag" ]; then
             TAG="$REF_NAME"
@@ -117,7 +255,7 @@ jobs:
           VIEW_LOG=$(mktemp)
           trap 'rm -f "$VIEW_LOG"' EXIT
           VIEW_FOUND=false
-          for attempt in 1 2; do
+          for _ in 1 2; do
             : > "$VIEW_LOG"
             if npm view "@amigo-ai/scribe-typescript-sdk@${VERSION}" version --json >"$VIEW_LOG" 2>&1; then
               VIEW_FOUND=true
@@ -151,9 +289,11 @@ jobs:
 
       - name: Publish Summary
         run: |
-          echo "## Publish Summary" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Package: @amigo-ai/scribe-typescript-sdk@${{ steps.release.outputs.version }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Tag: ${{ steps.release.outputs.tag }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Auth: npm trusted publishing (OIDC)" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Provenance: requested" >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "## Publish Summary"
+            echo ""
+            echo "- Package: @amigo-ai/scribe-typescript-sdk@${{ steps.release.outputs.version }}"
+            echo "- Tag: ${{ steps.release.outputs.tag }}"
+            echo "- Auth: npm trusted publishing (OIDC)"
+            echo "- Provenance: requested"
+          } >> "$GITHUB_STEP_SUMMARY"

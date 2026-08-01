@@ -257,16 +257,25 @@ The SDK follows [semver](https://semver.org). It is published to npm as
 [`@amigo-ai/scribe-typescript-sdk`](https://www.npmjs.com/package/@amigo-ai/scribe-typescript-sdk) with
 [npm provenance](https://docs.npmjs.com/generating-provenance-statements).
 
-Releases are cut manually and published by CI (`.github/workflows/release.yml`),
-mirroring `@amigo-ai/platform-sdk`:
+Releases are automated directly by `.github/workflows/release.yml`, without a
+third-party release action:
 
-1. Bump the version: `npm version <patch|minor|major>` (updates `package.json`
-   - `package-lock.json` and creates a `vX.Y.Z` git tag).
-2. Push the commit and tag: `git push --follow-tags`.
-3. Cut a **GitHub Release** for that tag. Publishing the release triggers
-   `release.yml`, which re-validates the package
+1. Merge source-code changes under `src/` to `main` using
+   [Conventional Commit](https://www.conventionalcommits.org/) titles. `fix:`
+   produces a patch release, `feat:` a minor release, and a breaking-change
+   marker (`feat!:` or a `BREAKING CHANGE:` footer) a major release.
+2. The workflow examines commit subjects and bodies since the latest `vX.Y.Z`
+   tag, calculates the next version, and creates a tag-only commit containing
+   the corresponding `package.json` / `package-lock.json` version bump. Changes
+   outside `src/` do not trigger the automated release flow.
+3. The workflow pushes the annotated tag and creates a GitHub Release whose
+   generated notes cover the commits since the previous release tag. It then
+   re-validates the package
    (`build → typecheck → test → publint + attw + npm pack`) and runs
-   `npm publish --provenance --access public`.
+   `npm publish --provenance --access public` automatically.
+
+The workflow can still be dispatched manually from a `vX.Y.Z` tag as a recovery
+path. The tag must match the version in `package.json`.
 
 Publishing uses **npm [trusted publishing](https://docs.npmjs.com/trusted-publishers)
 (OIDC)** — there is no npm token. The workflow authenticates with its
