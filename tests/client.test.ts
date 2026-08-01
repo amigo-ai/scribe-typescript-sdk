@@ -476,50 +476,6 @@ describe('getChecklist', () => {
   })
 })
 
-describe('generateChecklist', () => {
-  it('POSTs to the checklist path with the JSON body and returns the generated checklist', async () => {
-    const generated = { checklist: { session_id: 'sess-1', items: [] }, generation: { id: 'g' } }
-    const { fetch, calls } = mockFetch([{ status: 200, body: generated }])
-    const result = await client(fetch).generateChecklist('sess-1', {
-      title: 'Intake',
-      items: [
-        { id: 'vitals', label: 'Vitals' },
-        { id: 'allergies', label: 'Allergies' },
-      ],
-    })
-
-    expect(result).toEqual(generated)
-    expect(calls[0]!.url).toBe(`${BASE}/v1/${WS}/sessions/sess-1/checklist`)
-    expect(calls[0]!.init?.method).toBe('POST')
-    const headers = calls[0]!.init?.headers as Record<string, string>
-    expect(headers['Content-Type']).toBe('application/json')
-    expect(JSON.parse(String(calls[0]!.init?.body))).toEqual({
-      title: 'Intake',
-      items: [
-        { id: 'vitals', label: 'Vitals' },
-        { id: 'allergies', label: 'Allergies' },
-      ],
-    })
-  })
-
-  it('maps 404 to NotFoundError', async () => {
-    const { fetch } = mockFetch([{ status: 404, body: { message: 'no session' } }])
-    await expect(
-      client(fetch).generateChecklist('nope', {
-        title: 'Intake',
-        items: [{ id: 'x', label: 'X' }],
-      })
-    ).rejects.toBeInstanceOf(NotFoundError)
-  })
-
-  it('requires a sessionId', async () => {
-    const { fetch } = mockFetch([{}])
-    await expect(
-      client(fetch).generateChecklist('', { title: 'Intake', items: [{ id: 'x', label: 'X' }] })
-    ).rejects.toBeInstanceOf(ConfigurationError)
-  })
-})
-
 describe('getCodes', () => {
   it('GETs the codes path and returns the codes', async () => {
     const codes = { session_id: 'sess-1', items: [{ code: 'E11.9', system: 'ICD-10' }] }

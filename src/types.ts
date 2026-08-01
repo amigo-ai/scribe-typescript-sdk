@@ -207,18 +207,6 @@ export type SummaryResponse = Schemas['SummaryResponse']
 /** Response from generate-summary (`GeneratedSummaryResponse`) — the summary plus its generation metadata. */
 export type GeneratedSummaryResponse = Schemas['GeneratedSummaryResponse']
 
-/** A single checklist item (`ChecklistItemResponse`). */
-export type ChecklistItemResponse = Schemas['ChecklistItemResponse']
-
-/** A session's checklist (`ChecklistResponse`). */
-export type ChecklistResponse = Schemas['ChecklistResponse']
-
-/** Request body for {@link ScribeClient.generateChecklist} (`GenerateChecklistRequest`). `items` is required. */
-export type GenerateChecklistRequest = Schemas['GenerateChecklistRequest']
-
-/** Response from generate-checklist (`GeneratedChecklistResponse`) — the checklist plus its generation metadata. */
-export type GeneratedChecklistResponse = Schemas['GeneratedChecklistResponse']
-
 /** A single suggested code (`CodeSuggestionResponse`). */
 export type CodeSuggestionResponse = Schemas['CodeSuggestionResponse']
 
@@ -268,7 +256,6 @@ export type ErrorDetail = Schemas['ErrorDetail']
  */
 export type NoteGenerationResult = GeneratedNoteResponse | GenerationEnqueueResponse
 export type SummaryGenerationResult = GeneratedSummaryResponse | GenerationEnqueueResponse
-export type ChecklistGenerationResult = GeneratedChecklistResponse | GenerationEnqueueResponse
 export type CodesGenerationResult = GeneratedCodesResponse | GenerationEnqueueResponse
 export type ActionsGenerationResult = GeneratedActionsResponse | GenerationEnqueueResponse
 

@@ -6,7 +6,7 @@
  * One case (or block) per exposed method, happy + sad:
  *   createSession · getSession · listSessions (+ pagination) · allocate
  *   (+ cooldown) · getTranscript · getNote · generateNote · finalizeNote ·
- *   getSummary · generateSummary · getChecklist · generateChecklist · getCodes
+ *   getSummary · generateSummary · getChecklist · getCodes
  * plus the auth (401), not-found (404), and cross-workspace sad paths.
  *
  * NOT covered here (by design): the WS streaming + audio round-trip (phase 15,
@@ -361,7 +361,7 @@ describe.runIf(hasCreds)('Scribe resource-API e2e (all ScribeClient methods)', (
     )
   }, 60_000)
 
-  // --- getChecklist / generateChecklist ------------------------------------
+  // --- getChecklist --------------------------------------------------------
   it('getChecklist(fresh session) → 404 or the checklist shape', async () => {
     await readArtifactOr404(
       () => client.getChecklist(primary.id),
@@ -374,29 +374,6 @@ describe.runIf(hasCreds)('Scribe resource-API e2e (all ScribeClient methods)', (
       'getChecklist'
     )
   })
-
-  it('generateChecklist(with items) → generated checklist / enqueue or a typed error (503 dependency)', async () => {
-    await generateOr4xx(
-      () =>
-        client.generateChecklist(primary.id, {
-          title: 'sdk-e2e checklist',
-          items: [
-            { id: 'a', label: 'Chief complaint documented' },
-            { id: 'b', label: 'Vitals recorded' },
-          ],
-        }),
-      v => {
-        if (isGenerationEnqueued(v)) {
-          expect(v.generation.status).toBeTruthy()
-          return
-        }
-        expect(v.checklist).toBeTruthy()
-        expect(Array.isArray(v.checklist.items)).toBe(true)
-        expect(v.generation).toBeTruthy()
-      },
-      'generateChecklist'
-    )
-  }, 60_000)
 
   // --- getCodes ------------------------------------------------------------
   it('getCodes(fresh session) → 404 or the codes shape', async () => {

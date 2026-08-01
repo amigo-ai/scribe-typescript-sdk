@@ -471,70 +471,6 @@
         "title": "BotStatusEvent",
         "type": "object"
       },
-      "ChecklistItemRequest": {
-        "properties": {
-          "id": {
-            "maxLength": 128,
-            "minLength": 1,
-            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
-            "title": "Id",
-            "type": "string"
-          },
-          "label": {
-            "maxLength": 500,
-            "minLength": 1,
-            "title": "Label",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "label"
-        ],
-        "title": "ChecklistItemRequest",
-        "type": "object"
-      },
-      "ChecklistItemResponse": {
-        "properties": {
-          "evidence": {
-            "anyOf": [
-              {
-                "maxLength": 2000,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Evidence"
-          },
-          "id": {
-            "maxLength": 128,
-            "title": "Id",
-            "type": "string"
-          },
-          "label": {
-            "maxLength": 500,
-            "title": "Label",
-            "type": "string"
-          },
-          "state": {
-            "enum": [
-              "open",
-              "checked"
-            ],
-            "title": "State",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "label",
-          "state"
-        ],
-        "title": "ChecklistItemResponse",
-        "type": "object"
-      },
       "ChecklistItemStateResponse": {
         "properties": {
           "evidence": {
@@ -740,56 +676,6 @@
           "generation_status"
         ],
         "title": "ChecklistReadResponse",
-        "type": "object"
-      },
-      "ChecklistResponse": {
-        "properties": {
-          "created_at": {
-            "format": "date-time",
-            "title": "Created At",
-            "type": "string"
-          },
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/ChecklistItemResponse"
-            },
-            "title": "Items",
-            "type": "array"
-          },
-          "session_id": {
-            "format": "uuid",
-            "title": "Session Id",
-            "type": "string"
-          },
-          "status": {
-            "enum": [
-              "open",
-              "completed",
-              "archived"
-            ],
-            "title": "Status",
-            "type": "string"
-          },
-          "title": {
-            "maxLength": 256,
-            "title": "Title",
-            "type": "string"
-          },
-          "updated_at": {
-            "format": "date-time",
-            "title": "Updated At",
-            "type": "string"
-          }
-        },
-        "required": [
-          "session_id",
-          "title",
-          "status",
-          "items",
-          "created_at",
-          "updated_at"
-        ],
-        "title": "ChecklistResponse",
         "type": "object"
       },
       "ChecklistStateResponse": {
@@ -1193,31 +1079,6 @@
         "title": "FinalizeNoteResponse",
         "type": "object"
       },
-      "GenerateChecklistRequest": {
-        "properties": {
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/ChecklistItemRequest"
-            },
-            "maxItems": 100,
-            "minItems": 1,
-            "title": "Items",
-            "type": "array"
-          },
-          "title": {
-            "default": "Visit checklist",
-            "maxLength": 256,
-            "minLength": 1,
-            "title": "Title",
-            "type": "string"
-          }
-        },
-        "required": [
-          "items"
-        ],
-        "title": "GenerateChecklistRequest",
-        "type": "object"
-      },
       "GenerateNoteRequest": {
         "properties": {
           "instructions": {
@@ -1266,22 +1127,6 @@
           "generation"
         ],
         "title": "GeneratedActionsResponse",
-        "type": "object"
-      },
-      "GeneratedChecklistResponse": {
-        "properties": {
-          "checklist": {
-            "$ref": "#/components/schemas/ChecklistResponse"
-          },
-          "generation": {
-            "$ref": "#/components/schemas/GenerationMetadata"
-          }
-        },
-        "required": [
-          "checklist",
-          "generation"
-        ],
-        "title": "GeneratedChecklistResponse",
         "type": "object"
       },
       "GeneratedCodesResponse": {
@@ -3972,135 +3817,6 @@
           }
         },
         "summary": "Update Checklist",
-        "tags": [
-          "Scribe sessions"
-        ]
-      },
-      "post": {
-        "operationId": "generate-session-checklist",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "workspace_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Workspace Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "session_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Session Id",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/GenerateChecklistRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GeneratedChecklistResponse"
-                }
-              }
-            },
-            "description": "An identical job already succeeded; the checklist is returned."
-          },
-          "202": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/GeneratedChecklistResponse"
-                    },
-                    {
-                      "$ref": "#/components/schemas/GenerationEnqueueResponse"
-                    }
-                  ],
-                  "title": "Response Generate-Session-Checklist"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bearer token is absent or invalid."
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "The principal is outside this workspace or provider scope."
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "No provider-owned resource exists at this URL."
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Generation cannot proceed for the current session state."
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Request validation failed."
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Clinical generation is temporarily unavailable."
-          }
-        },
-        "summary": "Generate Checklist",
         "tags": [
           "Scribe sessions"
         ]

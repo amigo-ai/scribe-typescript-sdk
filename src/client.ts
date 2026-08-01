@@ -16,7 +16,6 @@ import type {
   AppointmentResponse,
   AskHistoryMessage,
   AutoCheckResponse,
-  ChecklistGenerationResult,
   ChecklistReadResponse,
   ChecklistStateResponse,
   CodeDecisionRequest,
@@ -26,7 +25,6 @@ import type {
   CreateSessionRequest,
   FinalizeNoteRequest,
   FinalizeNoteResponse,
-  GenerateChecklistRequest,
   GenerateNoteRequest,
   GenerationEnqueueResponse,
   ListAppointmentsParams,
@@ -694,33 +692,6 @@ export class ScribeClient {
     return this.http.request<ChecklistReadResponse>({
       method: 'GET',
       path: `/v1/${workspaceId}/sessions/${encodeURIComponent(sessionId)}/checklist`,
-      signal: options?.signal,
-      timeoutMs: options?.timeoutMs,
-    })
-  }
-
-  /**
-   * Generate the checklist for a session.
-   *
-   * `POST /v1/{workspace_id}/sessions/{session_id}/checklist` → 200 (synchronous
-   * artifact) or 202 (async job enqueued). Requires `scribe:sessions:write`. The
-   * request body's `items` are required (an optional `title` may be supplied).
-   * Returns {@link ChecklistGenerationResult} — narrow with
-   * {@link isGenerationEnqueued} to poll {@link ScribeClient.getChecklist}.
-   */
-  async generateChecklist(
-    sessionId: string,
-    input: GenerateChecklistRequest,
-    options?: CallOptions
-  ): Promise<ChecklistGenerationResult> {
-    const workspaceId = this.resolveWorkspaceId(options)
-    if (!sessionId) {
-      throw new ConfigurationError('sessionId is required', 'sessionId')
-    }
-    return this.http.request<ChecklistGenerationResult>({
-      method: 'POST',
-      path: `/v1/${workspaceId}/sessions/${encodeURIComponent(sessionId)}/checklist`,
-      body: input,
       signal: options?.signal,
       timeoutMs: options?.timeoutMs,
     })

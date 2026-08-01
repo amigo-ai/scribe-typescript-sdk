@@ -240,8 +240,7 @@ export interface paths {
         /** Get Checklist */
         get: operations["get-session-checklist"];
         put?: never;
-        /** Generate Checklist */
-        post: operations["generate-session-checklist"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -882,27 +881,6 @@ export interface components {
              */
             state: "joining" | "waiting_for_host" | "waiting_for_participant" | "playing_disclosure" | "listening" | "paused" | "idle" | "leaving" | "done" | "error";
         };
-        /** ChecklistItemRequest */
-        ChecklistItemRequest: {
-            /** Id */
-            id: string;
-            /** Label */
-            label: string;
-        };
-        /** ChecklistItemResponse */
-        ChecklistItemResponse: {
-            /** Evidence */
-            evidence?: string | null;
-            /** Id */
-            id: string;
-            /** Label */
-            label: string;
-            /**
-             * State
-             * @enum {string}
-             */
-            state: "open" | "checked";
-        };
         /** ChecklistItemStateResponse */
         ChecklistItemStateResponse: {
             /** Evidence */
@@ -952,33 +930,6 @@ export interface components {
             title?: string | null;
             /** Updated At */
             updated_at?: string | null;
-        };
-        /** ChecklistResponse */
-        ChecklistResponse: {
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /** Items */
-            items: components["schemas"]["ChecklistItemResponse"][];
-            /**
-             * Session Id
-             * Format: uuid
-             */
-            session_id: string;
-            /**
-             * Status
-             * @enum {string}
-             */
-            status: "open" | "completed" | "archived";
-            /** Title */
-            title: string;
-            /**
-             * Updated At
-             * Format: date-time
-             */
-            updated_at: string;
         };
         /**
          * ChecklistStateResponse
@@ -1137,16 +1088,6 @@ export interface components {
         FinalizeNoteResponse: {
             note: components["schemas"]["NoteResponse"];
         };
-        /** GenerateChecklistRequest */
-        GenerateChecklistRequest: {
-            /** Items */
-            items: components["schemas"]["ChecklistItemRequest"][];
-            /**
-             * Title
-             * @default Visit checklist
-             */
-            title: string;
-        };
         /** GenerateNoteRequest */
         GenerateNoteRequest: {
             /** Instructions */
@@ -1161,11 +1102,6 @@ export interface components {
         /** GeneratedActionsResponse */
         GeneratedActionsResponse: {
             actions: components["schemas"]["ActionsResponse"];
-            generation: components["schemas"]["GenerationMetadata"];
-        };
-        /** GeneratedChecklistResponse */
-        GeneratedChecklistResponse: {
-            checklist: components["schemas"]["ChecklistResponse"];
             generation: components["schemas"]["GenerationMetadata"];
         };
         /** GeneratedCodesResponse */
@@ -2551,96 +2487,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ChecklistReadResponse"];
-                };
-            };
-            /** @description Bearer token is absent or invalid. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description The principal is outside this workspace or provider scope. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description No provider-owned resource exists at this URL. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Generation cannot proceed for the current session state. */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Request validation failed. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Clinical generation is temporarily unavailable. */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    "generate-session-checklist": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                workspace_id: string;
-                session_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["GenerateChecklistRequest"];
-            };
-        };
-        responses: {
-            /** @description An identical job already succeeded; the checklist is returned. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["GeneratedChecklistResponse"];
-                };
-            };
-            /** @description Successful Response */
-            202: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["GeneratedChecklistResponse"] | components["schemas"]["GenerationEnqueueResponse"];
                 };
             };
             /** @description Bearer token is absent or invalid. */

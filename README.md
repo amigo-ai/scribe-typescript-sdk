@@ -29,7 +29,6 @@ Artifacts (note / summary / checklist / codes):
 - `getSummary` — `GET /v1/{workspace_id}/sessions/{session_id}/summary`
 - `generateSummary` — `POST /v1/{workspace_id}/sessions/{session_id}/summary`
 - `getChecklist` — `GET /v1/{workspace_id}/sessions/{session_id}/checklist`
-- `generateChecklist` — `POST /v1/{workspace_id}/sessions/{session_id}/checklist`
 - `getCodes` — `GET /v1/{workspace_id}/sessions/{session_id}/codes`
 - `generateCodes` — `POST /v1/{workspace_id}/sessions/{session_id}/codes`
 

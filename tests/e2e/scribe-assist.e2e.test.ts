@@ -19,7 +19,7 @@
  *   → generateActions → poll getActions to a ready `{items}` artifact
  *   → regenerateSection({base_version}) → 202; a STALE base_version → 409
  *     version_conflict
- *   → generateChecklist → poll ready → autoCheckChecklist → 200 {matches}
+ *   → poll checklist ready (server-generated) → autoCheckChecklist → 200 {matches}
  *   → askSession streams ≥1 `delta` frame then resolves on `done {generation_id}`
  *
  * Note generation (and thus a meaningful actions/regen/ask surface) needs a
@@ -331,18 +331,11 @@ describe.runIf(hasToken)('Scribe assist surface e2e (provider JWT → staging)',
     expect(staleErr).toBeInstanceOf(ConflictError)
     expect((staleErr as ConflictError).errorCode).toBe('version_conflict')
 
-    // 5. AUTO-CHECK: generate a checklist, wait ready, then auto-check → 200 with
-    //    a `matches` array (each `{item_id, matched, evidence?}`).
-    const checklistGen = await client.generateChecklist(session.id, {
-      title: 'sdk-e2e assist checklist',
-      items: [
-        { id: 'a', label: 'Chief complaint documented' },
-        { id: 'b', label: 'Plan discussed' },
-      ],
-    })
-    if (isGenerationEnqueued(checklistGen)) {
-      await pollReady(() => client.getChecklist(session.id), 'checklist')
-    }
+    // 5. AUTO-CHECK: the checklist is generated server-side now (the explicit
+    //    generate-checklist endpoint was retired in 0.7.0); wait until it is
+    //    ready, then auto-check → 200 with a `matches` array (each
+    //    `{item_id, matched, evidence?}`).
+    await pollReady(() => client.getChecklist(session.id), 'checklist')
     const auto = await client.autoCheckChecklist(session.id)
     expect(Array.isArray(auto.matches)).toBe(true)
     for (const m of auto.matches) {
