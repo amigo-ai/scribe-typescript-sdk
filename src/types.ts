@@ -20,6 +20,14 @@ export type SessionStatus = Schemas['SessionStatus']
 /** Modality of a scribe session: an in-person ("mic") recording or a Zoom meeting. */
 export type SessionMode = Schemas['SessionMode']
 
+/**
+ * The clinical note template a session's note is generated against
+ * (`NoteTemplate`). A session-owned setting: choose it at
+ * {@link ScribeClient.createSession} or change it later via
+ * {@link ScribeClient.updateSession}, and note generation honours it.
+ */
+export type NoteTemplate = Schemas['NoteTemplate']
+
 /** Availability of a per-session artifact. */
 export type ArtifactAvailability = Schemas['ArtifactAvailability']
 
@@ -37,6 +45,11 @@ export type ArtifactAvailabilityResponse = Schemas['ArtifactAvailabilityResponse
  * server applies the default). To create a **Zoom** session use
  * {@link ScribeClient.createZoomSession} (POST /zoom/sessions) — a non-in-person
  * `mode` on this endpoint is rejected with a `use_zoom_endpoint` 422 error.
+ *
+ * Session-owned note-generation fields — `first_name`, `last_name`, `visit_type`
+ * (free text) and `note_template` (a {@link NoteTemplate}) — are all optional and
+ * feed downstream note generation. They can also be changed later via
+ * {@link ScribeClient.updateSession}.
  */
 export type CreateSessionRequest = Omit<Schemas['CreateSessionRequest'], 'mode'> & {
   mode?: 'in_person'
@@ -109,7 +122,10 @@ export type SessionListResponse = Omit<Schemas['SessionListResponse'], 'continua
  * All fields optional; only fields present in the body are updated (the server
  * uses `exclude_unset`). `external_appointment_id` is explicitly nullable —
  * sending `null` clears the appointment link, while omitting it leaves the link
- * as-is.
+ * as-is. The session-owned note-generation fields — `first_name`, `last_name`,
+ * `visit_type` and `note_template` (a {@link NoteTemplate}) — are likewise
+ * settable here (same nullable-clear semantics), mirroring
+ * {@link CreateSessionRequest}.
  */
 export type UpdateSessionRequest = Schemas['UpdateSessionRequest']
 
