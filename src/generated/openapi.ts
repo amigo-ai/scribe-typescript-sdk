@@ -1098,8 +1098,7 @@ export interface components {
              */
             mode: "in_person";
             note_template?: components["schemas"]["NoteTemplate"] | null;
-            /** Visit Type */
-            visit_type?: string | null;
+            visit_type?: components["schemas"]["VisitType"] | null;
         };
         /** ErrorDetail */
         ErrorDetail: {
@@ -1509,8 +1508,7 @@ export interface components {
             } | null;
             mode?: components["schemas"]["SessionMode"] | null;
             note_template?: components["schemas"]["NoteTemplate"] | null;
-            /** Visit Type */
-            visit_type?: string | null;
+            visit_type?: components["schemas"]["VisitType"] | null;
         };
         /** ValidationError */
         ValidationError: {
@@ -1635,6 +1633,12 @@ export interface components {
             metadata?: {
                 [key: string]: unknown;
             };
+            /** First Name */
+            first_name?: string | null;
+            /** Last Name */
+            last_name?: string | null;
+            note_template?: components["schemas"]["NoteTemplate"] | null;
+            visit_type?: components["schemas"]["VisitType"] | null;
         };
         /**
          * ZoomSessionResponse
@@ -1646,6 +1650,8 @@ export interface components {
             bot_id: string;
             session: components["schemas"]["SessionResponse"];
         };
+        /** @enum {string} */
+        VisitType: "psych-intake" | "psych-follow-up" | "therapy-intake" | "therapy-follow-up" | "medical";
     };
     responses: never;
     parameters: never;

@@ -1096,14 +1096,12 @@
           "visit_type": {
             "anyOf": [
               {
-                "maxLength": 256,
-                "type": "string"
+                "$ref": "#/components/schemas/VisitType"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Visit Type"
+            ]
           }
         },
         "title": "CreateSessionRequest",
@@ -2246,14 +2244,12 @@
           "visit_type": {
             "anyOf": [
               {
-                "maxLength": 256,
-                "type": "string"
+                "$ref": "#/components/schemas/VisitType"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Visit Type"
+            ]
           }
         },
         "title": "UpdateSessionRequest",
@@ -2494,6 +2490,50 @@
             "additionalProperties": true,
             "title": "Metadata",
             "type": "object"
+          },
+          "first_name": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Name"
+          },
+          "last_name": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Name"
+          },
+          "note_template": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NoteTemplate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "visit_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VisitType"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -2521,6 +2561,16 @@
         ],
         "title": "ZoomSessionResponse",
         "type": "object"
+      },
+      "VisitType": {
+        "enum": [
+          "psych-intake",
+          "psych-follow-up",
+          "therapy-intake",
+          "therapy-follow-up",
+          "medical"
+        ],
+        "type": "string"
       }
     }
   },

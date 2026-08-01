@@ -85,14 +85,14 @@ describe('createSession', () => {
     const input: CreateSessionRequest = {
       first_name: 'Ada',
       last_name: 'Lovelace',
-      visit_type: 'annual physical',
+      visit_type: 'medical',
       note_template: 'soap',
     }
     await client(fetch).createSession(input)
     expect(JSON.parse(String(calls[0]!.init?.body))).toEqual({
       first_name: 'Ada',
       last_name: 'Lovelace',
-      visit_type: 'annual physical',
+      visit_type: 'medical',
       note_template: 'soap',
     })
   })
@@ -616,14 +616,14 @@ describe('updateSession', () => {
     const patch: UpdateSessionRequest = {
       first_name: 'Grace',
       last_name: 'Hopper',
-      visit_type: 'follow-up',
+      visit_type: 'psych-follow-up',
       note_template: 'medical',
     }
     await client(fetch).updateSession('sess-1', patch)
     expect(JSON.parse(String(calls[0]!.init?.body))).toEqual({
       first_name: 'Grace',
       last_name: 'Hopper',
-      visit_type: 'follow-up',
+      visit_type: 'psych-follow-up',
       note_template: 'medical',
     })
   })

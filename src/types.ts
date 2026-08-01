@@ -23,10 +23,21 @@ export type SessionMode = Schemas['SessionMode']
 /**
  * The clinical note template a session's note is generated against
  * (`NoteTemplate`). A session-owned setting: choose it at
- * {@link ScribeClient.createSession} or change it later via
- * {@link ScribeClient.updateSession}, and note generation honours it.
+ * {@link ScribeClient.createSession} / {@link ScribeClient.createZoomSession} or
+ * change it later via {@link ScribeClient.updateSession}, and note generation
+ * honours it.
  */
 export type NoteTemplate = Schemas['NoteTemplate']
+
+/**
+ * The clinical visit type a session is scribed for (`VisitType`) — one of
+ * `psych-intake` | `psych-follow-up` | `therapy-intake` | `therapy-follow-up` |
+ * `medical`. A session-owned setting: choose it at
+ * {@link ScribeClient.createSession} / {@link ScribeClient.createZoomSession} or
+ * change it later via {@link ScribeClient.updateSession}; it feeds note
+ * generation and seeds the session's checklist server-side.
+ */
+export type VisitType = Schemas['VisitType']
 
 /** Availability of a per-session artifact. */
 export type ArtifactAvailability = Schemas['ArtifactAvailability']
@@ -364,7 +375,19 @@ export type ChecklistStateResponse = Schemas['ChecklistStateResponse']
 /** Disclosure config for a Zoom capture bot (`ZoomDisclosureRequest`). */
 export type ZoomDisclosureRequest = Schemas['ZoomDisclosureRequest']
 
-/** Request body for {@link ScribeClient.createZoomSession} (`ZoomSessionRequest`). */
+/**
+ * Request body for {@link ScribeClient.createZoomSession} (`ZoomSessionRequest`).
+ *
+ * The browser hands only a `meeting_link` + `disclosure` choice (never a Zoom
+ * token). Reusing an `external_id` already owned by the same provider is
+ * idempotent; a different provider gets a 409 ({@link ConflictError}).
+ *
+ * Session-owned note-generation fields — `first_name`, `last_name`, `visit_type`
+ * (a {@link VisitType}) and `note_template` (a {@link NoteTemplate}) — are all
+ * optional and feed downstream note generation + checklist seeding server-side,
+ * mirroring {@link CreateSessionRequest}. They can also be changed later via
+ * {@link ScribeClient.updateSession}.
+ */
 export type ZoomSessionRequest = Schemas['ZoomSessionRequest']
 
 /** Response from {@link ScribeClient.createZoomSession} (`ZoomSessionResponse`) — the created session + dispatched `bot_id`. */

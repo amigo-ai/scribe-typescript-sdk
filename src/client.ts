@@ -347,6 +347,13 @@ export class ScribeClient {
    * {@link ZoomSessionResponse} plus the dispatched `bot_id`. `409`
    * ({@link ConflictError}) when the provider is not connected to Zoom or the
    * `external_id` collides; `503` when the control plane is unavailable.
+   *
+   * The optional session-owned note-generation fields — `first_name`,
+   * `last_name`, `visit_type` (a {@link VisitType}) and `note_template` (a
+   * {@link NoteTemplate}) — feed downstream note generation + checklist seeding
+   * server-side, mirroring {@link ScribeClient.createSession}. Omitting them is
+   * backward-compatible; they can also be set later via
+   * {@link ScribeClient.updateSession}.
    */
   async createZoomSession(
     input: ZoomSessionRequest,
