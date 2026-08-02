@@ -854,6 +854,8 @@ export interface components {
         };
         /** AutoCheckMatch */
         AutoCheckMatch: {
+            /** Category */
+            category: string;
             /** Evidence */
             evidence?: string | null;
             /** Item Id */
@@ -891,6 +893,8 @@ export interface components {
         };
         /** ChecklistItemStateResponse */
         ChecklistItemStateResponse: {
+            /** Category */
+            category: string;
             /** Evidence */
             evidence?: string | null;
             /** Id */
