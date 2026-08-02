@@ -546,13 +546,13 @@ describe('updateSession', () => {
     const session = {
       id: 'sess-1',
       status: 'created',
-      mode: 'zoom',
+      visit_type: 'medical',
       external_appointment_id: 'appt-9',
     }
     const { fetch, calls } = mockFetch([{ status: 200, body: session }])
     const result = await client(fetch).updateSession('sess-1', {
       external_appointment_id: 'appt-9',
-      mode: 'zoom',
+      visit_type: 'medical',
     })
 
     expect(result).toEqual(session)
@@ -562,7 +562,7 @@ describe('updateSession', () => {
     expect(headers['Content-Type']).toBe('application/json')
     expect(JSON.parse(String(calls[0]!.init?.body))).toEqual({
       external_appointment_id: 'appt-9',
-      mode: 'zoom',
+      visit_type: 'medical',
     })
   })
 

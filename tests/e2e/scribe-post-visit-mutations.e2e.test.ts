@@ -46,7 +46,13 @@ import {
 } from '../../src'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
-import type { NoteReadResponse, ScribeClient, ScribeStreamState, SessionResponse } from '../../src'
+import type {
+  NoteReadResponse,
+  ScribeClient,
+  ScribeStreamState,
+  SessionResponse,
+  StructuredNote,
+} from '../../src'
 import { e2eExternalId, hasToken, makeTokenClient, sleep, tokenEnv } from './harness'
 
 const hasWebSocket = typeof globalThis.WebSocket === 'function'
@@ -274,24 +280,25 @@ describe.runIf(hasToken)('Scribe GA post-visit mutations e2e (provider JWT → s
     const segmentCount = await pollTranscriptNonEmpty(client, session.id)
     expect(segmentCount).toBeGreaterThan(0)
 
-    // 4. Generate the note, then read its ready version for the base_version.
-    await client.generateNote(session.id, { note_type: 'soap' })
+    // 4. Generate the note (the session's pinned amd template governs), then read
+    //    its ready version for the base_version. amd-* templates emit the typed
+    //    `structured` envelope; `body` is deprecated.
+    await client.generateNote(session.id, { note_type: 'amd-therapy-progress' })
     const note = await pollNoteReady(client, session.id)
     const baseVersion = note.version as number
     expect(baseVersion).toBeGreaterThanOrEqual(1)
+    expect(note.structured).not.toBeNull()
 
-    // 5. putNote({base_version}) → version n+1 (compare-and-set). Send whichever
-    //    of body/structured the stored note uses (exactly one is required).
-    const patch =
-      note.body == null && note.structured != null
-        ? { base_version: baseVersion, structured: { ...note.structured, sdk_e2e_edit: true } }
-        : { base_version: baseVersion, body: `${note.body ?? ''}\n\nsdk-e2e edit` }
-    const written = await client.putNote(session.id, patch)
+    // 5. putNote({base_version, structured}) → version n+1 (compare-and-set). The
+    //    write is a complete-document replacement, so resend the full envelope
+    //    (the read `structured` shape is an untyped dict; cast to the write type).
+    const structured = note.structured as unknown as StructuredNote
+    const written = await client.putNote(session.id, { base_version: baseVersion, structured })
     expect(written.version).toBe(baseVersion + 1)
 
     // 6. A STALE base_version loses the CAS → 409 version_conflict.
     const staleErr = await client
-      .putNote(session.id, { base_version: baseVersion, body: 'stale write' })
+      .putNote(session.id, { base_version: baseVersion, structured })
       .catch((e: unknown) => e)
     expect(staleErr).toBeInstanceOf(ConflictError)
     expect((staleErr as ConflictError).errorCode).toBe('version_conflict')
@@ -345,7 +352,7 @@ describe.runIf(hasToken)('Scribe GA post-visit mutations e2e (provider JWT → s
 
     // 10. A post-finalize mutation is rejected → 409 invalid_session_state.
     const postFinalErr = await client
-      .putNote(session.id, { base_version: written.version + 1, body: 'too late' })
+      .putNote(session.id, { base_version: written.version + 1, structured })
       .catch((e: unknown) => e)
     expect(isScribeError(postFinalErr)).toBe(true)
     expect(postFinalErr).toBeInstanceOf(ConflictError)

@@ -555,10 +555,17 @@ export class ScribeClient {
    *
    * `POST /v1/{workspace_id}/sessions/{session_id}/note` → 200 (synchronous
    * artifact) or 202 (async job enqueued). Requires `scribe:sessions:write`.
-   * Pass a `note_type` (and optional free-form `instructions`) to steer
-   * generation. Returns {@link NoteGenerationResult} — narrow with
-   * {@link isGenerationEnqueued} to poll {@link ScribeClient.getNote} for the
-   * enqueued case.
+   * Pass a `note_type` (a {@link NoteTemplate}, e.g. an `amd-*` template) and
+   * optional free-form `instructions` to steer generation. Returns
+   * {@link NoteGenerationResult} — narrow with {@link isGenerationEnqueued} to
+   * poll {@link ScribeClient.getNote} for the enqueued case.
+   *
+   * `amd-*` templates emit the typed {@link StructuredNote} envelope
+   * (`generation_status === 'ready'`, `structured` populated, `body` null/empty).
+   * If schema-constrained generation fails validation after a bounded repair,
+   * the note's `generation_status` becomes `failed` and the poller's
+   * {@link NoteReadResponse} `error` carries `errorCode === 'structured_generation_invalid'`
+   * (no Markdown/`body` fallback).
    */
   async generateNote(
     sessionId: string,
@@ -579,15 +586,23 @@ export class ScribeClient {
   }
 
   /**
-   * Versioned note autosave — persist an edited note body/structured document.
+   * Versioned note autosave — persist an edited structured document.
    *
    * `PUT /v1/{workspace_id}/sessions/{session_id}/note` → 200. Requires
-   * `scribe:notes:rw_own`. Provide exactly one of `body` / `structured` and the
+   * `scribe:notes:rw_own`. Send the full {@link StructuredNote} envelope in
+   * `structured` (a complete-document replacement, not a partial patch) plus the
    * `base_version` you last read ({@link NoteReadResponse.version}). A stale
    * `base_version` loses the compare-and-set and returns `409` with
    * `errorCode === 'version_conflict'` ({@link ConflictError}); the returned
    * {@link UpdateNoteResponse} carries the new `version` (n+1). Once the note is
    * finalized, further writes return `409 invalid_session_state`.
+   *
+   * `body` is a **deprecated** compatibility field ({@link UpdateNoteRequest}):
+   * a `body` write is rejected up front with `422` and
+   * `errorCode === 'deprecated_field'` ({@link ValidationError}), never silently
+   * applied. An unsupported/mismatched pinned template returns `422
+   * unsupported_note_template`, and a structured document that fails template
+   * validation returns `422 validation_error` with per-field `details`.
    */
   async putNote(
     sessionId: string,
@@ -615,7 +630,10 @@ export class ScribeClient {
    * Requires `scribe:notes:rw_own`. The body's `base_version` is the version
    * being finalized; a stale value returns `409 version_conflict`
    * ({@link ConflictError}). 404 if no note exists to finalize; a subsequent
-   * {@link ScribeClient.putNote} returns `409 invalid_session_state`.
+   * {@link ScribeClient.putNote} returns `409 invalid_session_state`. If the
+   * stored note is missing a required AMD/template field, finalize is rejected
+   * with `422` and `errorCode === 'finalize_validation_failed'`
+   * ({@link ValidationError}).
    */
   async finalizeNote(
     sessionId: string,
