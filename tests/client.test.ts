@@ -10,7 +10,7 @@ import {
   ServiceUnavailableError,
   ValidationError,
 } from '../src/errors'
-import type { CreateSessionRequest, NoteTemplate, UpdateSessionRequest } from '../src/types'
+import type { AppointmentResponse, CreateSessionRequest, NoteTemplate, UpdateSessionRequest } from '../src/types'
 import { mockFetch, rejectingFetch } from './test-helpers'
 
 const BASE = 'https://api.example.test'
@@ -751,6 +751,23 @@ describe('getAppointment', () => {
     expect(calls[0]!.url).toBe(`${BASE}/v1/${WS}/appointments/appt-1`)
     expect(calls[0]!.init?.method).toBe('GET')
     expect(calls[0]!.init?.body).toBeUndefined()
+  })
+
+  it('carries the pre-visit chart fields (DOB/MRN/conditions/meds)', async () => {
+    // Phase 68: the appointment contract now exposes patient-chart fields the pre-visit UI renders.
+    const appointment = {
+      id: 'appt-1',
+      date_of_birth: '1991-03-14',
+      mrn: 'MRN-100238',
+      active_conditions: ['Major depressive disorder, recurrent', 'Insomnia'],
+      medications_to_review: ['Sertraline 100 mg daily'],
+    }
+    const { fetch } = mockFetch([{ status: 200, body: appointment }])
+    const result: AppointmentResponse = await client(fetch).getAppointment('appt-1')
+    expect(result.date_of_birth).toBe('1991-03-14')
+    expect(result.mrn).toBe('MRN-100238')
+    expect(result.active_conditions).toEqual(['Major depressive disorder, recurrent', 'Insomnia'])
+    expect(result.medications_to_review).toEqual(['Sertraline 100 mg daily'])
   })
 
   it('url-encodes the appointment id', async () => {

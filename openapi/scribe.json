@@ -143,10 +143,31 @@
       },
       "AppointmentResponse": {
         "properties": {
+          "active_conditions": {
+            "items": {
+              "maxLength": 256,
+              "type": "string"
+            },
+            "maxItems": 100,
+            "title": "Active Conditions",
+            "type": "array"
+          },
           "appointment_type": {
             "maxLength": 256,
             "title": "Appointment Type",
             "type": "string"
+          },
+          "date_of_birth": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date Of Birth"
           },
           "duration_minutes": {
             "minimum": 0,
@@ -167,6 +188,27 @@
             "maxLength": 256,
             "title": "Location Name",
             "type": "string"
+          },
+          "medications_to_review": {
+            "items": {
+              "maxLength": 256,
+              "type": "string"
+            },
+            "maxItems": 100,
+            "title": "Medications To Review",
+            "type": "array"
+          },
+          "mrn": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mrn"
           },
           "patient_entity_id": {
             "maxLength": 512,

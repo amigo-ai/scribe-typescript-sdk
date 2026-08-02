@@ -742,8 +742,12 @@ export interface components {
         };
         /** AppointmentResponse */
         AppointmentResponse: {
+            /** Active Conditions */
+            active_conditions?: string[];
             /** Appointment Type */
             appointment_type: string;
+            /** Date Of Birth */
+            date_of_birth?: string | null;
             /** Duration Minutes */
             duration_minutes: number;
             /**
@@ -755,6 +759,10 @@ export interface components {
             id: string;
             /** Location Name */
             location_name: string;
+            /** Medications To Review */
+            medications_to_review?: string[];
+            /** Mrn */
+            mrn?: string | null;
             /** Patient Entity Id */
             patient_entity_id: string;
             /** Patient Name */
