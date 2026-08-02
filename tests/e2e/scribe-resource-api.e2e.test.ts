@@ -127,6 +127,7 @@ describe.runIf(hasCreds)('Scribe resource-API e2e (all ScribeClient methods)', (
   async function createTracked(tag: string): Promise<SessionResponse> {
     const s = await client.createSession({
       external_id: e2eExternalId(tag),
+      visit_type: 'therapy-follow-up',
       metadata: { source: 'scribe-typescript-sdk resource-api e2e', tag },
     })
     createdSessionIds.push(s.id)
@@ -171,9 +172,15 @@ describe.runIf(hasCreds)('Scribe resource-API e2e (all ScribeClient methods)', (
 
   it('createSession is idempotent for the same external_id (same owner)', async () => {
     const externalId = e2eExternalId('idempotent')
-    const first = await client.createSession({ external_id: externalId })
+    const first = await client.createSession({
+      external_id: externalId,
+      visit_type: 'therapy-follow-up',
+    })
     createdSessionIds.push(first.id)
-    const second = await client.createSession({ external_id: externalId })
+    const second = await client.createSession({
+      external_id: externalId,
+      visit_type: 'therapy-follow-up',
+    })
     expect(second.id).toBe(first.id)
   })
 

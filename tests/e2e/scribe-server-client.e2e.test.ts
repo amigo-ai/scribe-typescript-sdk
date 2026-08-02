@@ -51,6 +51,7 @@ describe.runIf(hasCreds)(
       }
       session = await server.createSession(env.providerEmail!, {
         external_id: e2eExternalId('server'),
+        visit_type: 'therapy-follow-up',
         metadata: { source: 'scribe-typescript-sdk server-client e2e' },
       })
       expect(session.id).toBeTruthy()
@@ -122,6 +123,7 @@ describe.runIf(hasCreds)(
     it('allocate(email, sessionId) → {host, expiresAt} (or 503 when exhausted)', async () => {
       const target = await server.createSession(env.providerEmail!, {
         external_id: e2eExternalId('server-allocate'),
+        visit_type: 'therapy-follow-up',
       })
       try {
         const alloc = await server.allocate(env.providerEmail!, target.id)
@@ -192,6 +194,7 @@ describe.runIf(hasCreds)(
     it('prepareConnection → the browser-safe {sessionId, host, ticket} bundle (or 503)', async () => {
       const target = await server.createSession(env.providerEmail!, {
         external_id: e2eExternalId('server-prepare'),
+        visit_type: 'therapy-follow-up',
       })
       try {
         const conn = await server.prepareConnection(env.providerEmail!, target.id)
