@@ -255,7 +255,10 @@ describe.runIf(hasToken)('Scribe GA post-visit mutations e2e (provider JWT → s
 
   it('create → list/get → stream → putNote(+stale 409) → patchChecklist → patchCode → finalize → post-finalize 409', async () => {
     // 1. createSession (async token provider is exercised on every call).
-    session = await client.createSession({ external_id: e2eExternalId('postvisit') })
+    session = await client.createSession({
+      external_id: e2eExternalId('postvisit'),
+      visit_type: 'therapy-follow-up',
+    })
     createdIds.push(session.id)
     expect(session.id).toBeTruthy()
 
