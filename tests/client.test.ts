@@ -10,7 +10,12 @@ import {
   ServiceUnavailableError,
   ValidationError,
 } from '../src/errors'
-import type { AppointmentResponse, CreateSessionRequest, NoteTemplate, UpdateSessionRequest } from '../src/types'
+import type {
+  AppointmentResponse,
+  CreateSessionRequest,
+  NoteTemplate,
+  UpdateSessionRequest,
+} from '../src/types'
 import { mockFetch, rejectingFetch } from './test-helpers'
 
 const BASE = 'https://api.example.test'
