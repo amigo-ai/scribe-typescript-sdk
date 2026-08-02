@@ -564,8 +564,8 @@ export class ScribeClient {
    * (`generation_status === 'ready'`, `structured` populated, `body` null/empty).
    * If schema-constrained generation fails validation after a bounded repair,
    * the note's `generation_status` becomes `failed` and the poller's
-   * {@link NoteReadResponse} `error` carries `errorCode === 'structured_generation_invalid'`
-   * (no Markdown/`body` fallback).
+   * {@link NoteReadResponse} `error` ({@link ErrorDetail}) describes the
+   * `structured_generation_invalid` failure (no Markdown/`body` fallback).
    */
   async generateNote(
     sessionId: string,

@@ -220,7 +220,8 @@ Structured-note codes: `version_conflict` / `invalid_session_state` (409),
 `details`), and `finalize_validation_failed` (finalize with a required
 AMD/template field missing) — all `422`. Async structured generation that fails
 validation after a bounded repair leaves the note `generation_status === 'failed'`
-with `error.code === 'structured_generation_invalid'`.
+with an `error` (`ErrorDetail`) describing the `structured_generation_invalid`
+failure.
 
 ## Development
 
