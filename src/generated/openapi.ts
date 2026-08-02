@@ -58,6 +58,14 @@ export interface paths {
          *     session created on a prior day. Paginated to mirror the sibling `list-sessions` endpoint
          *     (offset-based `limit` + opaque `continuation_token`); consumers page the full window and bucket
          *     into past/today/upcoming client-side.
+         *
+         *     Optional date-range filter (phase 34): `start_after` (INCLUSIVE) and `start_before` (EXCLUSIVE) are
+         *     ISO-8601 date/datetime bounds on the appointment `start`, forming the half-open window
+         *     `[start_after, start_before)`. Either may be given alone; both omitted preserves the legacy behavior
+         *     (fully backward compatible). The filter is applied server-side over the window BEFORE pagination, so
+         *     a client that needs only its today+tomorrow slice fetches exactly that instead of paging a wide
+         *     window and filtering client-side. A malformed bound, an inverted range, or a span wider than
+         *     `_MAX_APPOINTMENT_RANGE` returns 400 `invalid_date_range`.
          */
         get: operations["list-appointments"];
         put?: never;
@@ -119,11 +127,13 @@ export interface paths {
         head?: never;
         /**
          * Update Session
-         * @description Patch an owned session's mutable fields (external_appointment_id / metadata / mode).
+         * @description Patch an owned session's mutable fields (external_appointment_id / metadata).
          *
          *     Idempotent; only fields present in the body are written (sending `external_appointment_id: null`
-         *     clears the link). A mode->zoom change is subject to the per-practitioner active-Zoom invariant
-         *     (PLAT-10). Returns the full refreshed session so callers see accurate artifact availability.
+         *     clears the link). A session's `mode` is fixed at create and is not a field on UpdateSessionRequest,
+         *     so PATCH cannot flip a session to zoom (that would mint a bot-less Zoom session that never went
+         *     through the saga at POST /zoom/sessions — the 5dca2633 failure class). Returns the full refreshed
+         *     session so callers see accurate artifact availability.
          */
         patch: operations["update-session"];
         trace?: never;
@@ -237,7 +247,15 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get Checklist */
+        /**
+         * Get Checklist
+         * @description Read the session's checklist.
+         *
+         *     The checklist is instantiated from the session's visit type when the session is created and is
+         *     the authoritative source of its items, so this returns them from the first frame — including
+         *     before any transcript exists. Persisted per-item manual and auto toggle state is overlaid on the
+         *     items. Returns 404 when the session has no checklist.
+         */
         get: operations["get-session-checklist"];
         put?: never;
         post?: never;
@@ -271,8 +289,15 @@ export interface paths {
          *     Evaluates each generated checklist item against the best-available transcript and returns a per-item
          *     `matched` verdict; matched items are persisted as `source='auto'` checklist state that COEXISTS with
          *     manual `PATCH /checklist` toggles — the upsert preserves any manually-decided item and never
-         *     clobbers it. Throttling is client-side by contract; the server relies on the provider circuit
-         *     breakers. No generated checklist yet (or no transcript) → an empty `{matches:[]}`.
+         *     clobbers it. No generated checklist yet (or no transcript) → an empty `{matches:[]}`.
+         *
+         *     No-op guard (phase 88): the handler hashes the auto-check input (selected transcript + checklist
+         *     items) and compares it to the last-checked hash stored on the session. An unchanged input
+         *     short-circuits — no LLM call, no upsert — and returns the already-persisted `source='auto'` state; a
+         *     changed (or first) input runs the LLM as before and then, under the session row lock, persists both
+         *     the matched items and the new hash. This keeps a redundant re-check (client double-fire, reconnect,
+         *     or a fire ahead of a fresher server snapshot) cheap regardless of the client's cadence; the provider
+         *     circuit breakers remain the backstop against a runaway rate.
          */
         post: operations["auto-check-session-checklist"];
         delete?: never;
@@ -393,12 +418,15 @@ export interface paths {
         get: operations["get-session-note"];
         /**
          * Update Note
-         * @description Versioned note autosave with optimistic concurrency (SPEC §6.1 P4).
+         * @description Versioned structured-note autosave with optimistic concurrency (design §4.2).
          *
-         *     Writes exactly one of body/structured to the latest draft note via a single-statement
-         *     compare-and-set on `version`, so two racing writers with the same base_version yield exactly one
+         *     Accepts `{base_version, structured}` only: a complete structured-document replacement, validated
+         *     as a full document against the pinned template (phase-71 registry) BEFORE the compare-and-set.
+         *     The CAS on `version` means two racing writers with the same base_version yield exactly one
          *     success and one 409 version_conflict. Rejected once the session is terminal (append-only, 409
-         *     invalid_session_state). 404 when no note has been generated yet.
+         *     invalid_session_state). 404 when no note has been generated yet. A `body` write is rejected with
+         *     422 deprecated_field (design §2.6); an unsupported template with 422 unsupported_note_template;
+         *     an invalid structured document with 422 validation_error carrying per-field `details`.
          */
         put: operations["update-session-note"];
         /** Generate Note */
@@ -601,6 +629,10 @@ export interface paths {
         /**
          * Get Zoom Connection
          * @description Whether the calling provider has a Zoom connection. NEVER returns token material.
+         *
+         *     Heals a near-expiry token on the poll (phase 35) so a connected-but-idle workspace never lets its
+         *     Zoom token lapse — the refresh + persist happen server-side before the status read, which then
+         *     reflects the outcome (`reconnect_required` is set when Zoom has rejected the stored credential).
          */
         get: operations["get-zoom-connection"];
         put?: never;
@@ -629,6 +661,10 @@ export interface paths {
          * Start Zoom Oauth
          * @description Begin the Zoom connect flow: mint a single-use server-held state + PKCE verifier bound to the
          *     provider/workspace and return the short-lived Zoom authorize URL the browser navigates to.
+         *
+         *     `web_origin` is the initiating web app's origin; if the code-level origin rule accepts it, it is
+         *     threaded through the state so the callback can 302 the browser back to it (phase 55). A missing or
+         *     rejected origin is dropped and the callback falls back to the configured return URL.
          */
         post: operations["start-zoom-oauth"];
         delete?: never;
@@ -1104,12 +1140,8 @@ export interface components {
         GenerateNoteRequest: {
             /** Instructions */
             instructions?: string | null;
-            /**
-             * Note Type
-             * @default medical
-             * @enum {string}
-             */
-            note_type: "full" | "medical" | "soap" | "dap" | "birp" | "amd-psych-intake" | "amd-psych-progress" | "amd-therapy-intake" | "amd-therapy-progress";
+            /** @default medical */
+            note_type: components["schemas"]["NoteTemplate"];
         };
         /** GeneratedActionsResponse */
         GeneratedActionsResponse: {
@@ -1184,7 +1216,10 @@ export interface components {
          * @description Reload-safe note poller: artifact fields present only when generation_status == "ready".
          */
         NoteReadResponse: {
-            /** Body */
+            /**
+             * Body
+             * @deprecated
+             */
             body?: string | null;
             error?: components["schemas"]["ErrorDetail"] | null;
             /** Generated At */
@@ -1209,8 +1244,11 @@ export interface components {
         };
         /** NoteResponse */
         NoteResponse: {
-            /** Body */
-            body: string;
+            /**
+             * Body
+             * @deprecated
+             */
+            body?: string | null;
             /** Generated At */
             generated_at: string | null;
             /**
@@ -1241,6 +1279,8 @@ export interface components {
         };
         /** @enum {string} */
         NoteTemplate: "full" | "medical" | "soap" | "dap" | "birp" | "amd-psych-intake" | "amd-psych-progress" | "amd-therapy-intake" | "amd-therapy-progress";
+        /** @enum {string} */
+        NoteValueSource: "scribe" | "clinician";
         /**
          * RegenerateSectionRequest
          * @description Body of `POST /sessions/{id}/note/regenerate-section` (SPEC §6.1 P4).
@@ -1310,6 +1350,66 @@ export interface components {
          * @enum {string}
          */
         SessionStatus: "in-progress" | "in-review" | "completed" | "cancelled" | "failed";
+        StructuredFieldValue: string | boolean | string[] | {
+            [key: string]: unknown;
+        } | {
+            [key: string]: unknown;
+        }[];
+        /**
+         * StructuredNote
+         * @description The canonical AMD structured-note envelope (design §2.3) — the only note
+         *     representation `PUT /sessions/{id}/note` accepts (`body` is deprecated, §2.6).
+         *
+         *     A write is a **complete-document replacement**, not a JSON merge: the client resends
+         *     every value on each write, changing only what it means to change. The full document is
+         *     validated against the pinned template from the phase-71 registry before the CAS update
+         *     (`validate_structured_note`).
+         */
+        StructuredNote: {
+            review?: components["schemas"]["StructuredNoteReview"];
+            /**
+             * Schema Version
+             * @constant
+             */
+            schema_version: 1;
+            /** Template Id */
+            template_id: string;
+            /** Template Version */
+            template_version: string;
+            /** Values */
+            values?: {
+                [key: string]: components["schemas"]["StructuredNoteValue"];
+            };
+        };
+        /**
+         * StructuredNoteReview
+         * @description Provider review/attestation state (design §2.3). `confirmed_sections` names the
+         *     template section ids the provider has confirmed; `amd_confirmed` is the finalize gate
+         *     (evaluated by phase 75). `acknowledgments` is the (currently empty) list of dismissed
+         *     safety/quality acknowledgments.
+         */
+        StructuredNoteReview: {
+            /** Acknowledgments */
+            acknowledgments?: string[];
+            /**
+             * Amd Confirmed
+             * @default false
+             */
+            amd_confirmed: boolean;
+            /** Confirmed Sections */
+            confirmed_sections?: string[];
+        };
+        /**
+         * StructuredNoteValue
+         * @description One entry of `structured.values`: the field value plus its provenance and an
+         *     optional short rationale (design §2.3 payload).
+         */
+        StructuredNoteValue: {
+            /** Rationale */
+            rationale?: string | null;
+            source: components["schemas"]["NoteValueSource"];
+            value: components["schemas"]["StructuredFieldValue"];
+        };
         /** SummaryReadResponse */
         SummaryReadResponse: {
             error?: components["schemas"]["ErrorDetail"] | null;
@@ -1406,22 +1506,23 @@ export interface components {
         };
         /**
          * UpdateNoteRequest
-         * @description Body of `PUT /sessions/{id}/note` — versioned note autosave (SPEC §6.1 P4).
+         * @description Body of `PUT /sessions/{id}/note` — versioned structured-note autosave (design §4.2).
          *
-         *     Exactly one of `body` / `structured` is provided per write (a note type is either
-         *     Markdown-bodied or structured; AMD confirmations live inside `structured`). `base_version`
-         *     is the version the client last read; a stale value loses the compare-and-set and returns
-         *     409 version_conflict.
+         *     The write is a **complete structured-document replacement**: send the full `structured`
+         *     envelope (every value) on each write, not a partial patch. `base_version` is the version
+         *     the client last read; a stale value loses the compare-and-set and returns
+         *     409 version_conflict. `body` is a **deprecated** compatibility field (design §2.6): a body
+         *     write is rejected with `422 deprecated_field` at the route, never silently applied.
          */
         UpdateNoteRequest: {
             /** Base Version */
             base_version: number;
-            /** Body */
+            /**
+             * Body
+             * @deprecated
+             */
             body?: string | null;
-            /** Structured */
-            structured?: {
-                [key: string]: unknown;
-            } | null;
+            structured?: components["schemas"]["StructuredNote"] | null;
         };
         /**
          * UpdateNoteResponse
@@ -1440,6 +1541,9 @@ export interface components {
          * UpdateSessionRequest
          * @description Mutable fields for `PATCH /sessions/{id}`. Only fields present in the body are updated.
          *
+         *     A session's `mode` is fixed at create — it is deliberately NOT a field here, so PATCH cannot flip a
+         *     session to zoom (which would mint a bot-less Zoom session that never went through the saga — the
+         *     `5dca2633` failure class). A Zoom session is created via `POST /v1/{workspace_id}/zoom/sessions`.
          *     `external_appointment_id` is explicitly nullable — sending `null` clears the link — so the route
          *     distinguishes "field omitted" (leave as-is) from "field set to null" via `exclude_unset`.
          */
@@ -1454,7 +1558,6 @@ export interface components {
             metadata?: {
                 [key: string]: unknown;
             } | null;
-            mode?: components["schemas"]["SessionMode"] | null;
             note_template?: components["schemas"]["NoteTemplate"] | null;
             visit_type?: components["schemas"]["VisitType"] | null;
         };
@@ -1471,6 +1574,8 @@ export interface components {
             /** Error Type */
             type: string;
         };
+        /** @enum {string} */
+        VisitType: "psych-intake" | "psych-follow-up" | "therapy-intake" | "therapy-follow-up" | "medical";
         /**
          * ZoomAuthorizeResponse
          * @description Response of `POST /zoom/oauth/authorize`.
@@ -1506,12 +1611,22 @@ export interface components {
          *     Deliberately holds only a boolean plus non-sensitive display fields; the
          *     encrypted access/refresh tokens live only in `scribe.zoom_connections` and are
          *     resolved server-side (phase 05) to dispatch a bot, never returned to a browser.
+         *
+         *     `reconnect_required` is true when Zoom rejected the stored refresh token (revoked/
+         *     expired), so the poll heals into a terminal state the UX can act on: the provider
+         *     is still `connected` on record, but must re-run the OAuth connect before a Zoom
+         *     start will succeed.
          */
         ZoomConnectionResponse: {
             /** Connected */
             connected: boolean;
             /** Connected At */
             connected_at?: string | null;
+            /**
+             * Reconnect Required
+             * @default false
+             */
+            reconnect_required: boolean;
             /** Zoom Email */
             zoom_email?: string | null;
         };
@@ -1575,16 +1690,16 @@ export interface components {
             external_appointment_id?: string | null;
             /** External Id */
             external_id?: string | null;
+            /** First Name */
+            first_name?: string | null;
+            /** Last Name */
+            last_name?: string | null;
             /** Meeting Link */
             meeting_link: string;
             /** Metadata */
             metadata?: {
                 [key: string]: unknown;
             };
-            /** First Name */
-            first_name?: string | null;
-            /** Last Name */
-            last_name?: string | null;
             note_template?: components["schemas"]["NoteTemplate"] | null;
             visit_type?: components["schemas"]["VisitType"] | null;
         };
@@ -1598,8 +1713,6 @@ export interface components {
             bot_id: string;
             session: components["schemas"]["SessionResponse"];
         };
-        /** @enum {string} */
-        VisitType: "psych-intake" | "psych-follow-up" | "therapy-intake" | "therapy-follow-up" | "medical";
     };
     responses: never;
     parameters: never;
@@ -1656,6 +1769,8 @@ export interface operations {
             query?: {
                 limit?: number;
                 continuation_token?: unknown;
+                start_after?: string | null;
+                start_before?: string | null;
             };
             header?: never;
             path: {
@@ -1672,6 +1787,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AppointmentListResponse"];
+                };
+            };
+            /** @description The `start_after` / `start_before` date range is malformed or too wide. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
             /** @description Bearer token is absent or invalid. */
@@ -1692,35 +1816,8 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description No provider-owned resource exists at this URL. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Generation cannot proceed for the current session state. */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
             /** @description Request validation failed. */
             422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Clinical generation is temporarily unavailable. */
-            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1937,7 +2034,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Request validation failed (`validation_error`), or a non-in-person `mode` was requested (`use_zoom_endpoint`) — the generic create is in-person only; create a Zoom session via POST /v1/{workspace_id}/zoom/sessions. */
+            /** @description Request validation failed (`validation_error`); a non-in-person `mode` was requested (`use_zoom_endpoint`) — the generic create is in-person only, create a Zoom session via POST /v1/{workspace_id}/zoom/sessions; no canonical `visit_type` was supplied to resolve a supported amd-* template (`note_template_required`); or the `visit_type`/`note_template` does not map to a supported amd-* template (`unsupported_note_template`). */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -2077,16 +2174,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description The practitioner already has an active Zoom session (`active_zoom_session_exists`). */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Request validation failed. */
+            /** @description Request validation failed (`validation_error`); or a PATCH of `visit_type`/`note_template` would leave the session without a supported amd-* template — no resolvable visit_type (`note_template_required`) or an unrecognized/legacy/mismatched pair (`unsupported_note_template`). */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -3201,7 +3289,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Request validation failed. */
+            /** @description A `body` write was attempted on the deprecated compatibility field (`deprecated_field`); the pinned template is unknown or the version does not match (`unsupported_note_template`); or the structured document failed template validation (`validation_error`, per-field `details`). */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -3435,7 +3523,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Request validation failed. */
+            /** @description A `body` write was attempted on the deprecated compatibility field (`deprecated_field`); the pinned template is unknown or the version does not match (`unsupported_note_template`); or the structured document failed template validation (`validation_error`, per-field `details`). */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -4083,7 +4171,9 @@ export interface operations {
     };
     "start-zoom-oauth": {
         parameters: {
-            query?: never;
+            query?: {
+                web_origin?: string;
+            };
             header?: never;
             path: {
                 workspace_id: string;
@@ -4229,7 +4319,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description The practitioner already has an active Zoom session (`active_zoom_session_exists`), the idempotency key was reused with a different fingerprint (`idempotency_key_conflict`), or the provider has not connected Zoom (`zoom_not_connected`). */
+            /** @description The practitioner already has an active Zoom session (`active_zoom_session_exists`), the idempotency key was reused with a different fingerprint (`idempotency_key_conflict`), the provider has not connected Zoom (`zoom_not_connected`), or Zoom rejected the stored credential and the provider must reconnect (`zoom_reconnect_required`). */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -4238,16 +4328,16 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Request validation failed (`validation_error`); no canonical `visit_type` was supplied to resolve a supported amd-* template (`note_template_required`); or the `visit_type`/`note_template` does not map to a supported amd-* template (`unsupported_note_template`). */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Bot dispatch failed; the session was compensated/cancelled (`bot_dispatch_failed`). */
+            /** @description Bot dispatch failed; the session was compensated/cancelled (`bot_dispatch_failed`), or refreshing the stored Zoom token was temporarily unavailable (`zoom_refresh_unavailable`). */
             503: {
                 headers: {
                     [name: string]: unknown;

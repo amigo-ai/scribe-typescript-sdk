@@ -318,13 +318,44 @@ export type ChecklistItemStateResponse = Schemas['ChecklistItemStateResponse']
  */
 export type TicketResponse = Schemas['TicketResponse']
 
+/* --- Structured note envelope (design §2.3) --- */
+
+/**
+ * The canonical AMD structured-note envelope (`StructuredNote`) — the only note
+ * representation `PUT /sessions/{id}/note` accepts (`body` is deprecated). Carries
+ * `schema_version`, `template_id`, `template_version`, the `values` map, and the
+ * provider `review` state. A write is a complete-document replacement validated
+ * against the pinned template before the compare-and-set.
+ */
+export type StructuredNote = Schemas['StructuredNote']
+
+/**
+ * One entry of `structured.values` (`StructuredNoteValue`) — the field `value`
+ * plus its `source` provenance and an optional short `rationale`.
+ */
+export type StructuredNoteValue = Schemas['StructuredNoteValue']
+
+/** The value of a single structured field (`StructuredFieldValue`). */
+export type StructuredFieldValue = Schemas['StructuredFieldValue']
+
+/** Provenance of a structured value (`NoteValueSource`) — `scribe` or `clinician`. */
+export type NoteValueSource = Schemas['NoteValueSource']
+
+/**
+ * Provider review/attestation state (`StructuredNoteReview`) — `confirmed_sections`,
+ * `acknowledgments`, and the `amd_confirmed` finalize gate.
+ */
+export type StructuredNoteReview = Schemas['StructuredNoteReview']
+
 /* --- Versioned note write / finalize (phase 08) --- */
 
 /**
  * Request body for {@link ScribeClient.putNote} (`UpdateNoteRequest`) — a
- * versioned autosave. Provide exactly one of `body` / `structured` per write and
- * the `base_version` the client last read; a stale `base_version` loses the
- * compare-and-set and returns `409 version_conflict`.
+ * versioned autosave. Send the full {@link StructuredNote} envelope in
+ * `structured` (a complete-document replacement) plus the `base_version` the
+ * client last read; a stale `base_version` loses the compare-and-set and returns
+ * `409 version_conflict`. `body` is a **deprecated** compatibility field: a
+ * `body` write is rejected with `422 deprecated_field`, never silently applied.
  */
 export type UpdateNoteRequest = Schemas['UpdateNoteRequest']
 
