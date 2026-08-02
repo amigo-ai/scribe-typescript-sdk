@@ -429,6 +429,11 @@
       },
       "AutoCheckMatch": {
         "properties": {
+          "category": {
+            "maxLength": 128,
+            "title": "Category",
+            "type": "string"
+          },
           "evidence": {
             "anyOf": [
               {
@@ -453,6 +458,7 @@
         },
         "required": [
           "item_id",
+          "category",
           "matched"
         ],
         "title": "AutoCheckMatch",
@@ -515,6 +521,11 @@
       },
       "ChecklistItemStateResponse": {
         "properties": {
+          "category": {
+            "maxLength": 128,
+            "title": "Category",
+            "type": "string"
+          },
           "evidence": {
             "anyOf": [
               {
@@ -588,6 +599,7 @@
         "required": [
           "id",
           "label",
+          "category",
           "state"
         ],
         "title": "ChecklistItemStateResponse",
