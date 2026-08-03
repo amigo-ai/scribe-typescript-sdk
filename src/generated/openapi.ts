@@ -313,7 +313,16 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get Codes */
+        /**
+         * Get Codes
+         * @description Reload-safe read of the session's ICD codes (phase 130: session-scoped, not generation-anchored).
+         *
+         *     Returns EVERY code owned by the caller on this session — both AI suggestions and provider-authored
+         *     rows — so provider codes are visible and the read no longer 404s when no codes generation ever ran.
+         *     ``generation_status`` is advisory metadata about the AI generation only (``ready`` when none ran or
+         *     it succeeded, ``pending`` while running, ``failed`` with its error): the ``items`` are authoritative
+         *     regardless.
+         */
         get: operations["get-session-codes"];
         put?: never;
         /**
@@ -328,6 +337,31 @@ export interface paths {
          *     succeeded. Codes are also auto-enqueued server-side when the note job succeeds.
          */
         post: operations["generate-session-codes"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/{workspace_id}/sessions/{session_id}/codes/manual": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Code
+         * @description Add a provider-authored ICD-10 code to an owned session (phase 130).
+         *
+         *     Persists the code with ``source='provider'``, ``generation_id=NULL``, and ``decision='approved'``
+         *     (adding a code is an affirmative act → it counts toward the finalize diagnosis gate immediately),
+         *     owned by the caller. Does NOT require a codes generation to exist. 409 invalid_session_state once
+         *     the session is terminal (post-finalize immutable); scoped ``scribe:notes:rw_own``.
+         */
+        post: operations["create-session-code"];
         delete?: never;
         options?: never;
         head?: never;
@@ -349,10 +383,13 @@ export interface paths {
         head?: never;
         /**
          * Decide Code
-         * @description Record the provider's approve/reject decision on one ICD suggestion (SPEC §6.1 P4).
+         * @description Record a provider's approve/reject decision and/or edit the text of one ICD suggestion.
          *
-         *     Idempotent and re-decidable until finalize; 409 invalid_session_state once the session is terminal.
-         *     404 when the suggestion is unknown or not owned by the provider.
+         *     Decision (approve/reject) applies to any owned row (SPEC §6.1 P4; idempotent, re-decidable until
+         *     finalize). Text edits (code/description/rationale, phase 130) are honored ONLY for provider-authored
+         *     rows — editing an AI suggestion's text is rejected with 422 ``invalid_code_edit`` (AI codes stay
+         *     approve/reject; reject + add a provider code to change one). 409 invalid_session_state once the
+         *     session is terminal. 404 when the suggestion is unknown or not owned by the provider.
          */
         patch: operations["decide-session-code"];
         trace?: never;
@@ -1005,21 +1042,28 @@ export interface components {
              */
             updated_at: string;
         };
+        /** @enum {string} */
+        CodeDecision: "approved" | "rejected";
         /**
          * CodeDecisionRequest
-         * @description Body of `PATCH /sessions/{id}/codes/{suggestion_id}` (V340): the provider's per-suggestion
-         *     decision. Idempotent and re-decidable until finalize.
+         * @description Body of `PATCH /sessions/{id}/codes/{suggestion_id}`.
+         *
+         *     Carries the provider's per-suggestion decision (V340; idempotent, re-decidable until finalize) and,
+         *     since phase 130, optional text edits (code/description/rationale). Text edits are honored only for
+         *     provider-authored rows (AI suggestions stay approve/reject). At least one field must be present.
          */
         CodeDecisionRequest: {
-            /**
-             * Decision
-             * @enum {string}
-             */
-            decision: "approved" | "rejected";
+            /** Code */
+            code?: string | null;
+            decision?: components["schemas"]["CodeDecision"] | null;
+            /** Description */
+            description?: string | null;
+            /** Rationale */
+            rationale?: string | null;
         };
         /**
          * CodeDecisionResponse
-         * @description 200 body for a persisted code decision, with when it was decided (who is the caller).
+         * @description 200 body for a persisted code decision/edit, with when it was decided (who is the caller).
          */
         CodeDecisionResponse: {
             /** Code */
@@ -1029,25 +1073,23 @@ export interface components {
              * Format: date-time
              */
             decided_at: string;
-            /**
-             * Decision
-             * @enum {string}
-             */
-            decision: "approved" | "rejected";
+            decision: components["schemas"]["CodeDecision"];
             /**
              * Id
              * Format: uuid
              */
             id: string;
+            source: components["schemas"]["CodeSource"];
         };
+        /** @enum {string} */
+        CodeSource: "ai" | "provider";
         /** CodeSuggestionResponse */
         CodeSuggestionResponse: {
             /** Code */
             code: string;
             /** Confidence */
             confidence?: number | null;
-            /** Decision */
-            decision?: ("approved" | "rejected") | null;
+            decision?: components["schemas"]["CodeDecision"] | null;
             /** Description */
             description: string;
             /**
@@ -1057,6 +1099,7 @@ export interface components {
             id: string;
             /** Rationale */
             rationale: string;
+            source: components["schemas"]["CodeSource"];
         };
         /** CodesReadResponse */
         CodesReadResponse: {
@@ -1076,6 +1119,25 @@ export interface components {
              * Format: uuid
              */
             session_id: string;
+        };
+        /**
+         * CreateCodeRequest
+         * @description Body of `POST /sessions/{id}/codes/manual` (phase 130): a provider-authored ICD code.
+         *
+         *     Persisted with source='provider', generation_id=NULL, and decision='approved' by default (adding a
+         *     code is an affirmative act → it counts toward the finalize diagnosis gate immediately). Does not
+         *     require a codes generation to exist.
+         */
+        CreateCodeRequest: {
+            /** Code */
+            code: string;
+            /** Description */
+            description: string;
+            /**
+             * Rationale
+             * @default
+             */
+            rationale: string;
         };
         /** CreateSessionRequest */
         CreateSessionRequest: {
@@ -2939,6 +3001,78 @@ export interface operations {
             };
             /** @description Clinical generation is temporarily unavailable. */
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    "create-session-code": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateCodeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CodeSuggestionResponse"];
+                };
+            };
+            /** @description Bearer token is absent or invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The principal is outside this workspace or provider scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No provider-owned resource exists at this URL. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The session is terminal and no longer accepts mutations (`invalid_session_state`). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request validation failed. */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

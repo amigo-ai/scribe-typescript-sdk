@@ -22,6 +22,8 @@ import type {
   CodeDecisionResponse,
   CodesGenerationResult,
   CodesReadResponse,
+  CodeSuggestionResponse,
+  CreateCodeRequest,
   CreateSessionRequest,
   FinalizeNoteRequest,
   FinalizeNoteResponse,
@@ -785,13 +787,44 @@ export class ScribeClient {
   }
 
   /**
-   * Record the provider's decision on a single suggested code.
+   * Add a provider-authored ICD code to a session.
+   *
+   * `POST /v1/{workspace_id}/sessions/{session_id}/codes/manual` → 201. Requires
+   * `scribe:notes:rw_own`. Persists the code with `source='provider'`,
+   * `generation_id=NULL`, and `decision='approved'` (adding a code is an
+   * affirmative act → it counts toward the finalize diagnosis gate immediately);
+   * does NOT require a codes generation to exist. Returns the persisted
+   * {@link CodeSuggestionResponse}. `409` ({@link ConflictError}) once the session
+   * is in a terminal (post-finalize) state.
+   */
+  async createCode(
+    sessionId: string,
+    input: CreateCodeRequest,
+    options?: CallOptions
+  ): Promise<CodeSuggestionResponse> {
+    const workspaceId = this.resolveWorkspaceId(options)
+    if (!sessionId) {
+      throw new ConfigurationError('sessionId is required', 'sessionId')
+    }
+    return this.http.request<CodeSuggestionResponse>({
+      method: 'POST',
+      path: `/v1/${workspaceId}/sessions/${encodeURIComponent(sessionId)}/codes/manual`,
+      body: input,
+      signal: options?.signal,
+      timeoutMs: options?.timeoutMs,
+    })
+  }
+
+  /**
+   * Record the provider's decision on (or edit the text of) a single code.
    *
    * `PATCH /v1/{workspace_id}/sessions/{session_id}/codes/{suggestion_id}` → 200.
-   * Requires `scribe:notes:rw_own`. The body's `decision` is `approved` /
-   * `rejected`; idempotent and re-decidable until finalize. Returns the persisted
-   * {@link CodeDecisionResponse}. 404 if the suggestion does not exist; `409`
-   * ({@link ConflictError}) once the session is in a terminal state.
+   * Requires `scribe:notes:rw_own`. The body carries an optional `decision`
+   * (`approved` / `rejected`; idempotent, re-decidable until finalize) and, since
+   * phase 130, optional text edits (`code` / `description` / `rationale`) honored
+   * for provider-authored rows; at least one field must be present. Returns the
+   * persisted {@link CodeDecisionResponse}. 404 if the suggestion does not exist;
+   * `409` ({@link ConflictError}) once the session is in a terminal state.
    */
   async patchCode(
     sessionId: string,
