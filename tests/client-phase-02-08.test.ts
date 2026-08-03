@@ -231,6 +231,97 @@ describe('patchCode', () => {
       client(fetch).patchCode('sess-1', '', { decision: 'approved' })
     ).rejects.toBeInstanceOf(ConfigurationError)
   })
+
+  it('passes through the widened text-edit body (code/description/rationale)', async () => {
+    const body = {
+      id: 'sug-1',
+      code: 'E11.65',
+      decision: 'approved',
+      decided_at: 't',
+      source: 'provider',
+    }
+    const { fetch, calls } = mockFetch([{ status: 200, body }])
+    const result = await client(fetch).patchCode('sess-1', 'sug-1', {
+      code: 'E11.65',
+      description: 'Type 2 diabetes mellitus with hyperglycemia',
+      rationale: 'Corrected per chart review',
+    })
+
+    expect(result).toEqual(body)
+    expect(calls[0]!.init?.method).toBe('PATCH')
+    expect(JSON.parse(String(calls[0]!.init?.body))).toEqual({
+      code: 'E11.65',
+      description: 'Type 2 diabetes mellitus with hyperglycemia',
+      rationale: 'Corrected per chart review',
+    })
+  })
+
+  it('passes through a decision + text edit together', async () => {
+    const { fetch, calls } = mockFetch([{ status: 200, body: {} }])
+    await client(fetch).patchCode('sess-1', 'sug-1', {
+      decision: 'approved',
+      description: 'Refined description',
+    })
+    expect(JSON.parse(String(calls[0]!.init?.body))).toEqual({
+      decision: 'approved',
+      description: 'Refined description',
+    })
+  })
+})
+
+describe('createCode', () => {
+  it('POSTs a provider-authored code to the manual path and returns the persisted suggestion', async () => {
+    const body = {
+      id: 'sug-9',
+      code: 'I10',
+      description: 'Essential (primary) hypertension',
+      rationale: '',
+      source: 'provider',
+      decision: 'approved',
+    }
+    const { fetch, calls } = mockFetch([{ status: 201, body }])
+    const result = await client(fetch).createCode('sess-1', {
+      code: 'I10',
+      description: 'Essential (primary) hypertension',
+      rationale: '',
+    })
+
+    expect(result).toEqual(body)
+    expect(calls[0]!.url).toBe(`${BASE}/v1/${WS}/sessions/sess-1/codes/manual`)
+    expect(calls[0]!.init?.method).toBe('POST')
+    expect(JSON.parse(String(calls[0]!.init?.body))).toEqual({
+      code: 'I10',
+      description: 'Essential (primary) hypertension',
+      rationale: '',
+    })
+  })
+
+  it('passes through a non-empty rationale', async () => {
+    const { fetch, calls } = mockFetch([{ status: 201, body: {} }])
+    await client(fetch).createCode('sess-1', {
+      code: 'E11.9',
+      description: 'Type 2 diabetes mellitus without complications',
+      rationale: 'Documented in assessment',
+    })
+    expect(JSON.parse(String(calls[0]!.init?.body))).toEqual({
+      code: 'E11.9',
+      description: 'Type 2 diabetes mellitus without complications',
+      rationale: 'Documented in assessment',
+    })
+  })
+
+  it('url-encodes the session id', async () => {
+    const { fetch, calls } = mockFetch([{ status: 201, body: {} }])
+    await client(fetch).createCode('a/b', { code: 'I10', description: 'HTN', rationale: '' })
+    expect(calls[0]!.url).toBe(`${BASE}/v1/${WS}/sessions/a%2Fb/codes/manual`)
+  })
+
+  it('requires a sessionId', async () => {
+    const { fetch } = mockFetch([{}])
+    await expect(
+      client(fetch).createCode('', { code: 'I10', description: 'HTN', rationale: '' })
+    ).rejects.toBeInstanceOf(ConfigurationError)
+  })
 })
 
 describe('patchChecklist', () => {

@@ -170,7 +170,7 @@
             "title": "Date Of Birth"
           },
           "duration_minutes": {
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Duration Minutes",
             "type": "integer"
           },
@@ -268,7 +268,7 @@
         "type": "object"
       },
       "AppointmentSession": {
-        "description": "The scribe session linked to an appointment (most-recent match on external_appointment_id).\n\nA focused summary — id + status + lifecycle timestamps — that lets a client render the\nappointment's visit state (e.g. \"in review\", \"completed\") directly from the appointments list,\nwith no second lookup. It is a strict subset of `SessionResponse` (same field names/types) minus\nthe artifact-availability sub-object: resolving artifact availability needs per-kind LATERAL\njoins, so it is deliberately left to `GET /sessions/{id}` and kept out of the appointment join,\nwhich stays a single cheap `DISTINCT ON` query over `scribe.sessions`.",
+        "description": "The scribe session linked to an appointment (most-recent match on external_appointment_id).\n\nA focused summary \u2014 id + status + lifecycle timestamps \u2014 that lets a client render the\nappointment's visit state (e.g. \"in review\", \"completed\") directly from the appointments list,\nwith no second lookup. It is a strict subset of `SessionResponse` (same field names/types) minus\nthe artifact-availability sub-object: resolving artifact availability needs per-kind LATERAL\njoins, so it is deliberately left to `GET /sessions/{id}` and kept out of the appointment join,\nwhich stays a single cheap `DISTINCT ON` query over `scribe.sessions`.",
         "properties": {
           "created_at": {
             "format": "date-time",
@@ -404,7 +404,7 @@
         "type": "object"
       },
       "AskRequest": {
-        "description": "Body of `POST /sessions/{id}/ask` — a streaming Q&A over the transcript + latest note.\n\nThe answer streams back as SSE `delta {text}` frames then a terminal `done {generation_id}`; the\nresponse is not persisted as an artifact (only a provenance row is recorded).",
+        "description": "Body of `POST /sessions/{id}/ask` \u2014 a streaming Q&A over the transcript + latest note.\n\nThe answer streams back as SSE `delta {text}` frames then a terminal `done {generation_id}`; the\nresponse is not persisted as an artifact (only a provenance row is recorded).",
         "properties": {
           "history": {
             "items": {
@@ -777,26 +777,70 @@
         "title": "ChecklistStateResponse",
         "type": "object"
       },
+      "CodeDecision": {
+        "enum": [
+          "approved",
+          "rejected"
+        ],
+        "type": "string"
+      },
       "CodeDecisionRequest": {
-        "description": "Body of `PATCH /sessions/{id}/codes/{suggestion_id}` (V340): the provider's per-suggestion\ndecision. Idempotent and re-decidable until finalize.",
+        "description": "Body of `PATCH /sessions/{id}/codes/{suggestion_id}`.\n\nCarries the provider's per-suggestion decision (V340; idempotent, re-decidable until finalize) and,\nsince phase 130, optional text edits (code/description/rationale). Text edits are honored only for\nprovider-authored rows (AI suggestions stay approve/reject). At least one field must be present.",
         "properties": {
-          "decision": {
-            "enum": [
-              "approved",
-              "rejected"
+          "code": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
             ],
-            "title": "Decision",
-            "type": "string"
+            "title": "Code"
+          },
+          "decision": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CodeDecision"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "rationale": {
+            "anyOf": [
+              {
+                "maxLength": 10000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rationale"
           }
         },
-        "required": [
-          "decision"
-        ],
         "title": "CodeDecisionRequest",
         "type": "object"
       },
       "CodeDecisionResponse": {
-        "description": "200 body for a persisted code decision, with when it was decided (who is the caller).",
+        "description": "200 body for a persisted code decision/edit, with when it was decided (who is the caller).",
         "properties": {
           "code": {
             "maxLength": 64,
@@ -809,27 +853,33 @@
             "type": "string"
           },
           "decision": {
-            "enum": [
-              "approved",
-              "rejected"
-            ],
-            "title": "Decision",
-            "type": "string"
+            "$ref": "#/components/schemas/CodeDecision"
           },
           "id": {
             "format": "uuid",
             "title": "Id",
             "type": "string"
+          },
+          "source": {
+            "$ref": "#/components/schemas/CodeSource"
           }
         },
         "required": [
           "id",
           "code",
           "decision",
-          "decided_at"
+          "decided_at",
+          "source"
         ],
         "title": "CodeDecisionResponse",
         "type": "object"
+      },
+      "CodeSource": {
+        "enum": [
+          "ai",
+          "provider"
+        ],
+        "type": "string"
       },
       "CodeSuggestionResponse": {
         "properties": {
@@ -841,8 +891,8 @@
           "confidence": {
             "anyOf": [
               {
-                "maximum": 1,
-                "minimum": 0,
+                "maximum": 1.0,
+                "minimum": 0.0,
                 "type": "number"
               },
               {
@@ -854,17 +904,12 @@
           "decision": {
             "anyOf": [
               {
-                "enum": [
-                  "approved",
-                  "rejected"
-                ],
-                "type": "string"
+                "$ref": "#/components/schemas/CodeDecision"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Decision"
+            ]
           },
           "description": {
             "maxLength": 2000,
@@ -880,13 +925,17 @@
             "maxLength": 10000,
             "title": "Rationale",
             "type": "string"
+          },
+          "source": {
+            "$ref": "#/components/schemas/CodeSource"
           }
         },
         "required": [
           "id",
           "code",
           "description",
-          "rationale"
+          "rationale",
+          "source"
         ],
         "title": "CodeSuggestionResponse",
         "type": "object"
@@ -959,6 +1008,35 @@
           "items"
         ],
         "title": "CodesResponse",
+        "type": "object"
+      },
+      "CreateCodeRequest": {
+        "description": "Body of `POST /sessions/{id}/codes/manual` (phase 130): a provider-authored ICD code.\n\nPersisted with source='provider', generation_id=NULL, and decision='approved' by default (adding a\ncode is an affirmative act \u2192 it counts toward the finalize diagnosis gate immediately). Does not\nrequire a codes generation to exist.",
+        "properties": {
+          "code": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Code",
+            "type": "string"
+          },
+          "description": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Description",
+            "type": "string"
+          },
+          "rationale": {
+            "default": "",
+            "maxLength": 10000,
+            "title": "Rationale",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "description"
+        ],
+        "title": "CreateCodeRequest",
         "type": "object"
       },
       "CreateSessionRequest": {
@@ -1110,7 +1188,7 @@
         "description": "Body of `POST /sessions/{id}/note/finalize` (V340).\n\n`base_version` is the note version the provider is finalizing; a stale value returns\n409 version_conflict. Server-side gate validation runs on the *stored* document, not the\nrequest, so a client cannot bypass required-field gates.",
         "properties": {
           "base_version": {
-            "minimum": 1,
+            "minimum": 1.0,
             "title": "Base Version",
             "type": "integer"
           }
@@ -1444,7 +1522,7 @@
           "version": {
             "anyOf": [
               {
-                "minimum": 1,
+                "minimum": 1.0,
                 "type": "integer"
               },
               {
@@ -1529,7 +1607,7 @@
             "type": "string"
           },
           "version": {
-            "minimum": 1,
+            "minimum": 1.0,
             "title": "Version",
             "type": "integer"
           }
@@ -1569,10 +1647,10 @@
         "type": "string"
       },
       "RegenerateSectionRequest": {
-        "description": "Body of `POST /sessions/{id}/note/regenerate-section` (SPEC §6.1 P4).\n\nRegenerates a single named section of the current note. `base_version` is the note version the\nclient last read; a stale value returns 409 version_conflict (never clobbers a racing manual edit).",
+        "description": "Body of `POST /sessions/{id}/note/regenerate-section` (SPEC \u00a76.1 P4).\n\nRegenerates a single named section of the current note. `base_version` is the note version the\nclient last read; a stale value returns 409 version_conflict (never clobbers a racing manual edit).",
         "properties": {
           "base_version": {
-            "minimum": 1,
+            "minimum": 1.0,
             "title": "Base Version",
             "type": "integer"
           },
@@ -1797,7 +1875,7 @@
       },
       "StructuredNote": {
         "additionalProperties": false,
-        "description": "The canonical AMD structured-note envelope (design §2.3) — the only note\nrepresentation `PUT /sessions/{id}/note` accepts (`body` is deprecated, §2.6).\n\nA write is a **complete-document replacement**, not a JSON merge: the client resends\nevery value on each write, changing only what it means to change. The full document is\nvalidated against the pinned template from the phase-71 registry before the CAS update\n(`validate_structured_note`).",
+        "description": "The canonical AMD structured-note envelope (design \u00a72.3) \u2014 the only note\nrepresentation `PUT /sessions/{id}/note` accepts (`body` is deprecated, \u00a72.6).\n\nA write is a **complete-document replacement**, not a JSON merge: the client resends\nevery value on each write, changing only what it means to change. The full document is\nvalidated against the pinned template from the phase-71 registry before the CAS update\n(`validate_structured_note`).",
         "properties": {
           "review": {
             "$ref": "#/components/schemas/StructuredNoteReview"
@@ -1836,7 +1914,7 @@
       },
       "StructuredNoteReview": {
         "additionalProperties": false,
-        "description": "Provider review/attestation state (design §2.3). `confirmed_sections` names the\ntemplate section ids the provider has confirmed; `amd_confirmed` is the finalize gate\n(evaluated by phase 75). `acknowledgments` is the (currently empty) list of dismissed\nsafety/quality acknowledgments.",
+        "description": "Provider review/attestation state (design \u00a72.3). `confirmed_sections` names the\ntemplate section ids the provider has confirmed; `amd_confirmed` is the finalize gate\n(evaluated by phase 75). `acknowledgments` is the (currently empty) list of dismissed\nsafety/quality acknowledgments.",
         "properties": {
           "acknowledgments": {
             "items": {
@@ -1865,7 +1943,7 @@
       },
       "StructuredNoteValue": {
         "additionalProperties": false,
-        "description": "One entry of `structured.values`: the field value plus its provenance and an\noptional short rationale (design §2.3 payload).",
+        "description": "One entry of `structured.values`: the field value plus its provenance and an\noptional short rationale (design \u00a72.3 payload).",
         "properties": {
           "rationale": {
             "anyOf": [
@@ -2046,7 +2124,7 @@
       "TranscriptSegment": {
         "properties": {
           "end_ms": {
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "End Ms",
             "type": "integer"
           },
@@ -2063,7 +2141,7 @@
             "title": "Speaker"
           },
           "start_ms": {
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Start Ms",
             "type": "integer"
           },
@@ -2082,7 +2160,7 @@
         "type": "object"
       },
       "TranscriptSegmentEvent": {
-        "description": "`transcript_segment` / `interim_transcript` SSE frame payload — one transcript utterance.\n\n`transcript_segment` frames are finalized; `interim_transcript` frames are the not-yet-final\nhypothesis for the same `ordinal` (identical shape). Clients dedupe/replace by `ordinal`.",
+        "description": "`transcript_segment` / `interim_transcript` SSE frame payload \u2014 one transcript utterance.\n\n`transcript_segment` frames are finalized; `interim_transcript` frames are the not-yet-final\nhypothesis for the same `ordinal` (identical shape). Clients dedupe/replace by `ordinal`.",
         "properties": {
           "ordinal": {
             "title": "Ordinal",
@@ -2138,10 +2216,10 @@
         "type": "object"
       },
       "UpdateNoteRequest": {
-        "description": "Body of `PUT /sessions/{id}/note` — versioned structured-note autosave (design §4.2).\n\nThe write is a **complete structured-document replacement**: send the full `structured`\nenvelope (every value) on each write, not a partial patch. `base_version` is the version\nthe client last read; a stale value loses the compare-and-set and returns\n409 version_conflict. `body` is a **deprecated** compatibility field (design §2.6): a body\nwrite is rejected with `422 deprecated_field` at the route, never silently applied.",
+        "description": "Body of `PUT /sessions/{id}/note` \u2014 versioned structured-note autosave (design \u00a74.2).\n\nThe write is a **complete structured-document replacement**: send the full `structured`\nenvelope (every value) on each write, not a partial patch. `base_version` is the version\nthe client last read; a stale value loses the compare-and-set and returns\n409 version_conflict. `body` is a **deprecated** compatibility field (design \u00a72.6): a body\nwrite is rejected with `422 deprecated_field` at the route, never silently applied.",
         "properties": {
           "base_version": {
-            "minimum": 1,
+            "minimum": 1.0,
             "title": "Base Version",
             "type": "integer"
           },
@@ -2184,7 +2262,7 @@
             "type": "string"
           },
           "version": {
-            "minimum": 1,
+            "minimum": 1.0,
             "title": "Version",
             "type": "integer"
           }
@@ -2197,7 +2275,7 @@
         "type": "object"
       },
       "UpdateSessionRequest": {
-        "description": "Mutable fields for `PATCH /sessions/{id}`. Only fields present in the body are updated.\n\nA session's `mode` is fixed at create — it is deliberately NOT a field here, so PATCH cannot flip a\nsession to zoom (which would mint a bot-less Zoom session that never went through the saga — the\n`5dca2633` failure class). A Zoom session is created via `POST /v1/{workspace_id}/zoom/sessions`.\n`external_appointment_id` is explicitly nullable — sending `null` clears the link — so the route\ndistinguishes \"field omitted\" (leave as-is) from \"field set to null\" via `exclude_unset`.",
+        "description": "Mutable fields for `PATCH /sessions/{id}`. Only fields present in the body are updated.\n\nA session's `mode` is fixed at create \u2014 it is deliberately NOT a field here, so PATCH cannot flip a\nsession to zoom (which would mint a bot-less Zoom session that never went through the saga \u2014 the\n`5dca2633` failure class). A Zoom session is created via `POST /v1/{workspace_id}/zoom/sessions`.\n`external_appointment_id` is explicitly nullable \u2014 sending `null` clears the link \u2014 so the route\ndistinguishes \"field omitted\" (leave as-is) from \"field set to null\" via `exclude_unset`.",
         "properties": {
           "external_appointment_id": {
             "anyOf": [
@@ -2401,7 +2479,7 @@
         "type": "object"
       },
       "ZoomDisclosureRequest": {
-        "description": "Disclosure config for a Zoom capture bot (SPEC §6.1 P3).\n\n`enabled` gates whether the bot plays a recording-disclosure clip on join; `audio_key` names the\nclip when enabled. Passed through server-side to the control plane's bot dispatch — the browser\nnever talks to the control plane directly.",
+        "description": "Disclosure config for a Zoom capture bot (SPEC \u00a76.1 P3).\n\n`enabled` gates whether the bot plays a recording-disclosure clip on join; `audio_key` names the\nclip when enabled. Passed through server-side to the control plane's bot dispatch \u2014 the browser\nnever talks to the control plane directly.",
         "properties": {
           "audio_key": {
             "anyOf": [
@@ -2482,7 +2560,7 @@
         "type": "object"
       },
       "ZoomSessionRequest": {
-        "description": "Body of `POST /zoom/sessions` — the whole Zoom capture saga behind one call.\n\nThe browser hands only a `meeting_link` + disclosure choice (never a `zoomAccessToken`): the\nScribe API creates the session, resolves the provider's STORED Zoom token, and dispatches the bot\nserver-side. `external_id` is the per-attempt idempotency key (same semantics as\n`CreateSessionRequest`).",
+        "description": "Body of `POST /zoom/sessions` \u2014 the whole Zoom capture saga behind one call.\n\nThe browser hands only a `meeting_link` + disclosure choice (never a `zoomAccessToken`): the\nScribe API creates the session, resolves the provider's STORED Zoom token, and dispatches the bot\nserver-side. `external_id` is the per-attempt idempotency key (same semantics as\n`CreateSessionRequest`).",
         "properties": {
           "disclosure": {
             "$ref": "#/components/schemas/ZoomDisclosureRequest"
@@ -2642,7 +2720,7 @@
     },
     "/v1/{workspace_id}/appointments": {
       "get": {
-        "description": "List appointments over a rolling date-anchored window (workspace + provider read-scoped).\n\nPhase 38 ships a deliberate static stub sourced from the superscribe-web seed (see\n`src/appointments.py`); the response contract is stable so the source can later swap to a\ndownstream customer API via a managed External Integration without a wire change. TESTING STOPGAP\n(phase 45a, SUPERSEDED BY PHASE 45): the stub emits a rolling window `[today - back, today +\nforward]` (env-tunable, defaults 14/30 → 360 items max) instead of today-only, so date-pinned\nappointment ids stay in-list across day-rollovers and the phase-41 session join keeps linking a\nsession created on a prior day. Paginated to mirror the sibling `list-sessions` endpoint\n(offset-based `limit` + opaque `continuation_token`); consumers page the full window and bucket\ninto past/today/upcoming client-side.\n\nOptional date-range filter (phase 34): `start_after` (INCLUSIVE) and `start_before` (EXCLUSIVE) are\nISO-8601 date/datetime bounds on the appointment `start`, forming the half-open window\n`[start_after, start_before)`. Either may be given alone; both omitted preserves the legacy behavior\n(fully backward compatible). The filter is applied server-side over the window BEFORE pagination, so\na client that needs only its today+tomorrow slice fetches exactly that instead of paging a wide\nwindow and filtering client-side. A malformed bound, an inverted range, or a span wider than\n`_MAX_APPOINTMENT_RANGE` returns 400 `invalid_date_range`.",
+        "description": "List appointments over a rolling date-anchored window (workspace + provider read-scoped).\n\nPhase 38 ships a deliberate static stub sourced from the superscribe-web seed (see\n`src/appointments.py`); the response contract is stable so the source can later swap to a\ndownstream customer API via a managed External Integration without a wire change. TESTING STOPGAP\n(phase 45a, SUPERSEDED BY PHASE 45): the stub emits a rolling window `[today - back, today +\nforward]` (env-tunable, defaults 14/30 \u2192 360 items max) instead of today-only, so date-pinned\nappointment ids stay in-list across day-rollovers and the phase-41 session join keeps linking a\nsession created on a prior day. Paginated to mirror the sibling `list-sessions` endpoint\n(offset-based `limit` + opaque `continuation_token`); consumers page the full window and bucket\ninto past/today/upcoming client-side.\n\nOptional date-range filter (phase 34): `start_after` (INCLUSIVE) and `start_before` (EXCLUSIVE) are\nISO-8601 date/datetime bounds on the appointment `start`, forming the half-open window\n`[start_after, start_before)`. Either may be given alone; both omitted preserves the legacy behavior\n(fully backward compatible). The filter is applied server-side over the window BEFORE pagination, so\na client that needs only its today+tomorrow slice fetches exactly that instead of paging a wide\nwindow and filtering client-side. A malformed bound, an inverted range, or a span wider than\n`_MAX_APPOINTMENT_RANGE` returns 400 `invalid_date_range`.",
         "operationId": "list-appointments",
         "parameters": [
           {
@@ -3056,7 +3134,7 @@
                 }
               }
             },
-            "description": "Request validation failed (`validation_error`); a non-in-person `mode` was requested (`use_zoom_endpoint`) — the generic create is in-person only, create a Zoom session via POST /v1/{workspace_id}/zoom/sessions; no canonical `visit_type` was supplied to resolve a supported amd-* template (`note_template_required`); or the `visit_type`/`note_template` does not map to a supported amd-* template (`unsupported_note_template`)."
+            "description": "Request validation failed (`validation_error`); a non-in-person `mode` was requested (`use_zoom_endpoint`) \u2014 the generic create is in-person only, create a Zoom session via POST /v1/{workspace_id}/zoom/sessions; no canonical `visit_type` was supplied to resolve a supported amd-* template (`note_template_required`); or the `visit_type`/`note_template` does not map to a supported amd-* template (`unsupported_note_template`)."
           }
         },
         "summary": "Create Session",
@@ -3168,7 +3246,7 @@
         ]
       },
       "patch": {
-        "description": "Patch an owned session's mutable fields (external_appointment_id / metadata).\n\nIdempotent; only fields present in the body are written (sending `external_appointment_id: null`\nclears the link). A session's `mode` is fixed at create and is not a field on UpdateSessionRequest,\nso PATCH cannot flip a session to zoom (that would mint a bot-less Zoom session that never went\nthrough the saga at POST /zoom/sessions — the 5dca2633 failure class). Returns the full refreshed\nsession so callers see accurate artifact availability.",
+        "description": "Patch an owned session's mutable fields (external_appointment_id / metadata).\n\nIdempotent; only fields present in the body are written (sending `external_appointment_id: null`\nclears the link). A session's `mode` is fixed at create and is not a field on UpdateSessionRequest,\nso PATCH cannot flip a session to zoom (that would mint a bot-less Zoom session that never went\nthrough the saga at POST /zoom/sessions \u2014 the 5dca2633 failure class). Returns the full refreshed\nsession so callers see accurate artifact availability.",
         "operationId": "update-session",
         "parameters": [
           {
@@ -3251,7 +3329,7 @@
                 }
               }
             },
-            "description": "Request validation failed (`validation_error`); or a PATCH of `visit_type`/`note_template` would leave the session without a supported amd-* template — no resolvable visit_type (`note_template_required`) or an unrecognized/legacy/mismatched pair (`unsupported_note_template`)."
+            "description": "Request validation failed (`validation_error`); or a PATCH of `visit_type`/`note_template` would leave the session without a supported amd-* template \u2014 no resolvable visit_type (`note_template_required`) or an unrecognized/legacy/mismatched pair (`unsupported_note_template`)."
           }
         },
         "summary": "Update Session",
@@ -3486,7 +3564,7 @@
     },
     "/v1/{workspace_id}/sessions/{session_id}/allocate": {
       "post": {
-        "description": "Allocate a scribe-streaming GameServer for an owned session and return `{host, expires_at}`.\n\nThe dispatcher leg of create -> allocate -> WS-attach (decision 3): the browser never allocates.\nThe allocation is intentionally NOT persisted as a session mutation — a reconnect re-allocates a\nfresh GameServer, and the WS attach re-verifies ownership.",
+        "description": "Allocate a scribe-streaming GameServer for an owned session and return `{host, expires_at}`.\n\nThe dispatcher leg of create -> allocate -> WS-attach (decision 3): the browser never allocates.\nThe allocation is intentionally NOT persisted as a session mutation \u2014 a reconnect re-allocates a\nfresh GameServer, and the WS attach re-verifies ownership.",
         "operationId": "allocate-session",
         "parameters": [
           {
@@ -3598,7 +3676,7 @@
     },
     "/v1/{workspace_id}/sessions/{session_id}/ask": {
       "post": {
-        "description": "Streaming Q&A over the session transcript + latest note (SPEC §3.3, header-auth fetch streaming).\n\nNot persisted as an artifact — only a provenance row is recorded (its id is the `generation_id` in\nthe terminal `done` frame). Reuses `generation.py`'s provider clients + circuit breakers. Allowed on\na terminal session (post-visit Q&A is read-only; the post-finalize immutability guard applies only\nto regenerate-section + actions generation).",
+        "description": "Streaming Q&A over the session transcript + latest note (SPEC \u00a73.3, header-auth fetch streaming).\n\nNot persisted as an artifact \u2014 only a provenance row is recorded (its id is the `generation_id` in\nthe terminal `done` frame). Reuses `generation.py`'s provider clients + circuit breakers. Allowed on\na terminal session (post-visit Q&A is read-only; the post-finalize immutability guard applies only\nto regenerate-section + actions generation).",
         "operationId": "ask-session",
         "parameters": [
           {
@@ -3799,7 +3877,7 @@
     },
     "/v1/{workspace_id}/sessions/{session_id}/checklist": {
       "get": {
-        "description": "Read the session's checklist.\n\nThe checklist is instantiated from the session's visit type when the session is created and is\nthe authoritative source of its items, so this returns them from the first frame — including\nbefore any transcript exists. Persisted per-item manual and auto toggle state is overlaid on the\nitems. Returns 404 when the session has no checklist.",
+        "description": "Read the session's checklist.\n\nThe checklist is instantiated from the session's visit type when the session is created and is\nthe authoritative source of its items, so this returns them from the first frame \u2014 including\nbefore any transcript exists. Persisted per-item manual and auto toggle state is overlaid on the\nitems. Returns 404 when the session has no checklist.",
         "operationId": "get-session-checklist",
         "parameters": [
           {
@@ -4005,7 +4083,7 @@
     },
     "/v1/{workspace_id}/sessions/{session_id}/checklist/auto-check": {
       "post": {
-        "description": "LLM auto-check of the generated checklist against the (partial) transcript mid-session (phase 09).\n\nEvaluates each generated checklist item against the best-available transcript and returns a per-item\n`matched` verdict; matched items are persisted as `source='auto'` checklist state that COEXISTS with\nmanual `PATCH /checklist` toggles — the upsert preserves any manually-decided item and never\nclobbers it. No generated checklist yet (or no transcript) → an empty `{matches:[]}`.\n\nNo-op guard (phase 88): the handler hashes the auto-check input (selected transcript + checklist\nitems) and compares it to the last-checked hash stored on the session. An unchanged input\nshort-circuits — no LLM call, no upsert — and returns the already-persisted `source='auto'` state; a\nchanged (or first) input runs the LLM as before and then, under the session row lock, persists both\nthe matched items and the new hash. This keeps a redundant re-check (client double-fire, reconnect,\nor a fire ahead of a fresher server snapshot) cheap regardless of the client's cadence; the provider\ncircuit breakers remain the backstop against a runaway rate.",
+        "description": "LLM auto-check of the generated checklist against the (partial) transcript mid-session (phase 09).\n\nEvaluates each generated checklist item against the best-available transcript and returns a per-item\n`matched` verdict; matched items are persisted as `source='auto'` checklist state that COEXISTS with\nmanual `PATCH /checklist` toggles \u2014 the upsert preserves any manually-decided item and never\nclobbers it. No generated checklist yet (or no transcript) \u2192 an empty `{matches:[]}`.\n\nNo-op guard (phase 88): the handler hashes the auto-check input (selected transcript + checklist\nitems) and compares it to the last-checked hash stored on the session. An unchanged input\nshort-circuits \u2014 no LLM call, no upsert \u2014 and returns the already-persisted `source='auto'` state; a\nchanged (or first) input runs the LLM as before and then, under the session row lock, persists both\nthe matched items and the new hash. This keeps a redundant re-check (client double-fire, reconnect,\nor a fire ahead of a fresher server snapshot) cheap regardless of the client's cadence; the provider\ncircuit breakers remain the backstop against a runaway rate.",
         "operationId": "auto-check-session-checklist",
         "parameters": [
           {
@@ -4099,6 +4177,7 @@
     },
     "/v1/{workspace_id}/sessions/{session_id}/codes": {
       "get": {
+        "description": "Reload-safe read of the session's ICD codes (phase 130: session-scoped, not generation-anchored).\n\nReturns EVERY code owned by the caller on this session \u2014 both AI suggestions and provider-authored\nrows \u2014 so provider codes are visible and the read no longer 404s when no codes generation ever ran.\n``generation_status`` is advisory metadata about the AI generation only (``ready`` when none ran or\nit succeeded, ``pending`` while running, ``failed`` with its error): the ``items`` are authoritative\nregardless.",
         "operationId": "get-session-codes",
         "parameters": [
           {
@@ -4320,9 +4399,113 @@
         ]
       }
     },
+    "/v1/{workspace_id}/sessions/{session_id}/codes/manual": {
+      "post": {
+        "description": "Add a provider-authored ICD-10 code to an owned session (phase 130).\n\nPersists the code with ``source='provider'``, ``generation_id=NULL``, and ``decision='approved'``\n(adding a code is an affirmative act \u2192 it counts toward the finalize diagnosis gate immediately),\nowned by the caller. Does NOT require a codes generation to exist. 409 invalid_session_state once\nthe session is terminal (post-finalize immutable); scoped ``scribe:notes:rw_own``.",
+        "operationId": "create-session-code",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCodeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodeSuggestionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bearer token is absent or invalid."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The principal is outside this workspace or provider scope."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "No provider-owned resource exists at this URL."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The session is terminal and no longer accepts mutations (`invalid_session_state`)."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          }
+        },
+        "summary": "Create Code",
+        "tags": [
+          "Scribe sessions"
+        ]
+      }
+    },
     "/v1/{workspace_id}/sessions/{session_id}/codes/{suggestion_id}": {
       "patch": {
-        "description": "Record the provider's approve/reject decision on one ICD suggestion (SPEC §6.1 P4).\n\nIdempotent and re-decidable until finalize; 409 invalid_session_state once the session is terminal.\n404 when the suggestion is unknown or not owned by the provider.",
+        "description": "Record a provider's approve/reject decision and/or edit the text of one ICD suggestion.\n\nDecision (approve/reject) applies to any owned row (SPEC \u00a76.1 P4; idempotent, re-decidable until\nfinalize). Text edits (code/description/rationale, phase 130) are honored ONLY for provider-authored\nrows \u2014 editing an AI suggestion's text is rejected with 422 ``invalid_code_edit`` (AI codes stay\napprove/reject; reject + add a provider code to change one). 409 invalid_session_state once the\nsession is terminal. 404 when the suggestion is unknown or not owned by the provider.",
         "operationId": "decide-session-code",
         "parameters": [
           {
@@ -4436,7 +4619,7 @@
     },
     "/v1/{workspace_id}/sessions/{session_id}/end": {
       "post": {
-        "description": "End an owned session (`created`/`in-progress` -> `in-review`), guarded against a live stream.\n\nMic race guard (§3A.2): while a streaming worker is attached the WS worker is the sole finalizer,\nso REST end returns 409 `session_streaming` and never touches transcript artifacts. Permitted\nonly for an abandoned/never-streamed session; the guarded flip cannot race the worker or reaper.",
+        "description": "End an owned session (`created`/`in-progress` -> `in-review`), guarded against a live stream.\n\nMic race guard (\u00a73A.2): while a streaming worker is attached the WS worker is the sole finalizer,\nso REST end returns 409 `session_streaming` and never touches transcript artifacts. Permitted\nonly for an abandoned/never-streamed session; the guarded flip cannot race the worker or reaper.",
         "operationId": "end-session",
         "parameters": [
           {
@@ -4865,7 +5048,7 @@
         ]
       },
       "put": {
-        "description": "Versioned structured-note autosave with optimistic concurrency (design §4.2).\n\nAccepts `{base_version, structured}` only: a complete structured-document replacement, validated\nas a full document against the pinned template (phase-71 registry) BEFORE the compare-and-set.\nThe CAS on `version` means two racing writers with the same base_version yield exactly one\nsuccess and one 409 version_conflict. Rejected once the session is terminal (append-only, 409\ninvalid_session_state). 404 when no note has been generated yet. A `body` write is rejected with\n422 deprecated_field (design §2.6); an unsupported template with 422 unsupported_note_template;\nan invalid structured document with 422 validation_error carrying per-field `details`.",
+        "description": "Versioned structured-note autosave with optimistic concurrency (design \u00a74.2).\n\nAccepts `{base_version, structured}` only: a complete structured-document replacement, validated\nas a full document against the pinned template (phase-71 registry) BEFORE the compare-and-set.\nThe CAS on `version` means two racing writers with the same base_version yield exactly one\nsuccess and one 409 version_conflict. Rejected once the session is terminal (append-only, 409\ninvalid_session_state). 404 when no note has been generated yet. A `body` write is rejected with\n422 deprecated_field (design \u00a72.6); an unsupported template with 422 unsupported_note_template;\nan invalid structured document with 422 validation_error carrying per-field `details`.",
         "operationId": "update-session-note",
         "parameters": [
           {
@@ -4969,7 +5152,7 @@
     },
     "/v1/{workspace_id}/sessions/{session_id}/note/finalize": {
       "post": {
-        "description": "Server-authoritative finalize (SPEC §6.1 P4): validate gates on the stored note, then atomically\nsubmit the note + complete the session.\n\nOptimistic concurrency via `base_version`; AMD/template required-field gates run on the STORED\ndocument (a client cannot bypass them by omitting fields from the request). An already-submitted\nnote is an idempotent 200. A terminal cancelled/failed session is 409 invalid_session_state and the\nnote submit is rolled back with it (the two writes are one unit of work).",
+        "description": "Server-authoritative finalize (SPEC \u00a76.1 P4): validate gates on the stored note, then atomically\nsubmit the note + complete the session.\n\nOptimistic concurrency via `base_version`; AMD/template required-field gates run on the STORED\ndocument (a client cannot bypass them by omitting fields from the request). An already-submitted\nnote is an idempotent 200. A terminal cancelled/failed session is 409 invalid_session_state and the\nnote submit is rolled back with it (the two writes are one unit of work).",
         "operationId": "finalize-session-note",
         "parameters": [
           {
@@ -5399,7 +5582,7 @@
     },
     "/v1/{workspace_id}/sessions/{session_id}/ticket": {
       "post": {
-        "description": "Mint a WS attach ticket for an owned, non-terminal session and return `{ticket, expires_at}`.\n\nA thin server-side wrapper over identity's RFC 8693 ``token_exchange`` grant (the mint lives in\nidentity): it forwards the browser's raw provider JWT as ``subject_token`` so identity binds the\nticket to this session/workspace/provider (``aud=scribe-streaming``, scope\n``scribe:streams:connect``, ~5-min TTL). Routing this through the Scribe API keeps the browser's\nCORS surface a single service — CORS can't scope identity's ``/token`` to one grant type. The SDK\n`connectionProvider` calls this on every (re)connect and presents the ticket at the streaming\nworker's WS handshake.",
+        "description": "Mint a WS attach ticket for an owned, non-terminal session and return `{ticket, expires_at}`.\n\nA thin server-side wrapper over identity's RFC 8693 ``token_exchange`` grant (the mint lives in\nidentity): it forwards the browser's raw provider JWT as ``subject_token`` so identity binds the\nticket to this session/workspace/provider (``aud=scribe-streaming``, scope\n``scribe:streams:connect``, ~5-min TTL). Routing this through the Scribe API keeps the browser's\nCORS surface a single service \u2014 CORS can't scope identity's ``/token`` to one grant type. The SDK\n`connectionProvider` calls this on every (re)connect and presents the ticket at the streaming\nworker's WS handshake.",
         "operationId": "mint-attach-ticket",
         "parameters": [
           {
@@ -5963,7 +6146,7 @@
         ]
       },
       "get": {
-        "description": "Whether the calling provider has a Zoom connection. NEVER returns token material.\n\nHeals a near-expiry token on the poll (phase 35) so a connected-but-idle workspace never lets its\nZoom token lapse — the refresh + persist happen server-side before the status read, which then\nreflects the outcome (`reconnect_required` is set when Zoom has rejected the stored credential).",
+        "description": "Whether the calling provider has a Zoom connection. NEVER returns token material.\n\nHeals a near-expiry token on the poll (phase 35) so a connected-but-idle workspace never lets its\nZoom token lapse \u2014 the refresh + persist happen server-side before the status read, which then\nreflects the outcome (`reconnect_required` is set when Zoom has rejected the stored credential).",
         "operationId": "get-zoom-connection",
         "parameters": [
           {

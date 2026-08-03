@@ -371,11 +371,28 @@ export type FinalizeNoteRequest = Schemas['FinalizeNoteRequest']
 
 /* --- Code decisions (phase 08) --- */
 
-/** Request body for {@link ScribeClient.patchCode} (`CodeDecisionRequest`) — `approved` / `rejected`. */
+/**
+ * Request body for {@link ScribeClient.patchCode} (`CodeDecisionRequest`). Carries
+ * the per-suggestion `decision` (`approved` / `rejected`; idempotent, re-decidable
+ * until finalize) and, since phase 130, optional text edits
+ * (`code`/`description`/`rationale`) honored for provider-authored rows. All fields
+ * are optional; at least one must be present.
+ */
 export type CodeDecisionRequest = Schemas['CodeDecisionRequest']
 
-/** Response from {@link ScribeClient.patchCode} (`CodeDecisionResponse`) — the persisted decision. */
+/** Response from {@link ScribeClient.patchCode} (`CodeDecisionResponse`) — the persisted decision (carries `source`). */
 export type CodeDecisionResponse = Schemas['CodeDecisionResponse']
+
+/**
+ * Request body for {@link ScribeClient.createCode} (`CreateCodeRequest`, phase 130) —
+ * a provider-authored ICD code (`code` + `description`, optional `rationale`).
+ * Persisted with `source='provider'` and `decision='approved'` (it counts toward the
+ * finalize diagnosis gate immediately); does not require a codes generation to exist.
+ */
+export type CreateCodeRequest = Schemas['CreateCodeRequest']
+
+/** Provenance of a code (`CodeSource`) — `'ai'` (model suggestion) or `'provider'` (provider-authored). */
+export type CodeSource = Schemas['CodeSource']
 
 /* --- Checklist toggles (phase 08) --- */
 
