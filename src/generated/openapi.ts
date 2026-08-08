@@ -485,13 +485,15 @@ export interface paths {
         put?: never;
         /**
          * Finalize Note
-         * @description Server-authoritative finalize (SPEC §6.1 P4): validate gates on the stored note, then atomically
-         *     submit the note + complete the session.
+         * @description Server-authoritative finalize (SPEC §6.1 P4): atomically submit the note + complete the session.
          *
-         *     Optimistic concurrency via `base_version`; AMD/template required-field gates run on the STORED
-         *     document (a client cannot bypass them by omitting fields from the request). An already-submitted
-         *     note is an idempotent 200. A terminal cancelled/failed session is 409 invalid_session_state and the
-         *     note submit is rolled back with it (the two writes are one unit of work).
+         *     Phase 178: finalize accepts ANY stored note shape — there is no note-content/structural validation
+         *     gate. A note with missing required fields, no approved diagnosis, `amd_confirmed=false`, and/or a
+         *     structurally-off document finalizes 200. The only non-validation mechanics still enforced are
+         *     ownership/scope, `base_version` optimistic concurrency, already-submitted idempotency (200), and the
+         *     atomic session completion. An already-submitted note is an idempotent 200. A terminal
+         *     cancelled/failed session is 409 invalid_session_state and the note submit is rolled back with it (the
+         *     two writes are one unit of work).
          */
         post: operations["finalize-session-note"];
         delete?: never;
@@ -1273,9 +1275,14 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
+        /** @enum {string} */
+        NoteGenerationReadStatus: "ready" | "pending" | "failed" | "empty";
         /**
          * NoteReadResponse
          * @description Reload-safe note poller: artifact fields present only when generation_status == "ready".
+         *
+         *     ``generation_status == "empty"`` is the phase-147 terminal state for a session ended with zero
+         *     usable transcript segments: no note was (or will be) generated, and no artifact fields are present.
          */
         NoteReadResponse: {
             /**
@@ -1286,7 +1293,7 @@ export interface components {
             error?: components["schemas"]["ErrorDetail"] | null;
             /** Generated At */
             generated_at?: string | null;
-            generation_status: components["schemas"]["GenerationReadStatus"];
+            generation_status: components["schemas"]["NoteGenerationReadStatus"];
             /** Session Id */
             session_id?: string | null;
             /** Signed At */
@@ -3585,13 +3592,13 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description A required AMD/template field is missing on the stored note (`finalize_validation_failed`). */
+            /** @description Validation Error */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -4453,7 +4460,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description The practitioner already has an active Zoom session (`active_zoom_session_exists`), the idempotency key was reused with a different fingerprint (`idempotency_key_conflict`), the provider has not connected Zoom (`zoom_not_connected`), or Zoom rejected the stored credential and the provider must reconnect (`zoom_reconnect_required`). */
+            /** @description The practitioner already has an active Zoom session (`active_zoom_session_exists`), the idempotency key was reused with a different fingerprint (`idempotency_key_conflict`), the provider has not connected Zoom (`zoom_not_connected`), Zoom rejected the stored credential and the provider must reconnect (`zoom_reconnect_required`), or the Zoom meeting hasn't started yet — start the meeting, then retry (`zoom_meeting_not_started`). */
             409: {
                 headers: {
                     [name: string]: unknown;
