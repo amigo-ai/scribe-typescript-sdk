@@ -232,6 +232,15 @@ export type GenerationStatus = Schemas['GenerationStatus']
 /** Read-time generation status of an artifact (`ready`/`pending`/`failed`). */
 export type GenerationReadStatus = Schemas['GenerationReadStatus']
 
+/**
+ * Read-time generation status of the note artifact (`NoteGenerationReadStatus`) —
+ * `ready`/`pending`/`failed` plus `empty`. `empty` is the phase-147 terminal state
+ * for a session ended with zero usable transcript segments: no note was (or will
+ * be) generated and no artifact fields are present. This is the note-specific
+ * superset of {@link GenerationReadStatus}, carried by {@link NoteReadResponse}.
+ */
+export type NoteGenerationReadStatus = Schemas['NoteGenerationReadStatus']
+
 /** Which artifact a generation job produces (`ArtifactKind`). */
 export type ArtifactKind = Schemas['ArtifactKind']
 
@@ -370,6 +379,12 @@ export type UpdateNoteResponse = Schemas['UpdateNoteResponse']
 export type FinalizeNoteRequest = Schemas['FinalizeNoteRequest']
 
 /* --- Code decisions (phase 08) --- */
+
+/**
+ * A per-suggestion code decision (`CodeDecision`) — `'approved'` or `'rejected'`.
+ * Decisions are idempotent and re-decidable until the note is finalized.
+ */
+export type CodeDecision = Schemas['CodeDecision']
 
 /**
  * Request body for {@link ScribeClient.patchCode} (`CodeDecisionRequest`). Carries
