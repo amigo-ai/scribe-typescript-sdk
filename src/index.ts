@@ -54,6 +54,35 @@ export { AudioRingBuffer } from './ring-buffer'
 export { buildWsUrl } from './ws-url'
 export { backoffDelayMs, RECONNECT } from './backoff'
 
+// --- Browser recording layer (phase 16) ---
+export { floatToPcm16, STT_SAMPLE_RATE } from './audio'
+export {
+  AudioCapture,
+  captureMicrophone,
+  captureSystemAudio,
+  captureStreamsForMode,
+  createPcmCapturePipeline,
+  stopCapturedStreams,
+  DEFAULT_AUDIO_BUFFER_SIZE,
+  SYSTEM_AUDIO_CANCELLED,
+  SYSTEM_AUDIO_MISSING,
+} from './audio-capture'
+export type {
+  AudioCaptureMode,
+  AudioCaptureOptions,
+  AudioCaptureLike,
+  CapturedStreams,
+  PcmCapturePipeline,
+} from './audio-capture'
+export { ScribeRecorder } from './recorder'
+export type {
+  ScribeRecorderOptions,
+  ScribeRecorderState,
+  ScribeRecorderStatus,
+  MicPermission,
+  ScribeStreamClientLike,
+} from './recorder'
+
 // --- Wire contract (MASTER decisions 11–12) ---
 export {
   WS_CONNECT_PATH,
