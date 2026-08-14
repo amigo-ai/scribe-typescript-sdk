@@ -191,6 +191,9 @@ export class ScribeClient {
    * `GET /v1/{workspace_id}/sessions` → 200. Requires `scribe:sessions:read_own`.
    * Pass `limit` to cap the page size and `continuation_token` (from a prior
    * response) to fetch the next page; `has_more` signals whether one exists.
+   * Optionally filter by creation time with `created_after` (inclusive) and
+   * `created_before` (exclusive) — ISO date-time bounds forming a half-open
+   * window `[created_after, created_before)`; either may be given alone.
    */
   async listSessions(
     params: ListSessionsParams = {},
@@ -206,6 +209,16 @@ export class ScribeClient {
     // (string or number) is stringified by the query builder.
     if (params.continuation_token != null) {
       query.continuation_token = params.continuation_token
+    }
+    // Half-open created-at window: `created_after` inclusive, `created_before`
+    // exclusive (both optional/nullable ISO date-time). Skip a null/absent bound
+    // so it is never serialized as the literal string "null"; a real bound is
+    // forwarded as-is. Either may be given alone.
+    if (params.created_after != null) {
+      query.created_after = params.created_after
+    }
+    if (params.created_before != null) {
+      query.created_before = params.created_before
     }
     return this.http.request<SessionListResponse>({
       method: 'GET',

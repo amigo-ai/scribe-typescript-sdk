@@ -96,9 +96,11 @@ export type TranscriptResponse = Schemas['TranscriptResponse']
 export type ErrorResponseBody = Schemas['ErrorResponse']
 
 /**
- * Query params for {@link ScribeClient.listSessions} — `limit` (page size) and
- * `continuation_token` (opaque cursor from a prior page's response). Both
- * optional; derived from the generated `list-sessions` operation. The
+ * Query params for {@link ScribeClient.listSessions} — `limit` (page size),
+ * `continuation_token` (opaque cursor from a prior page's response), and the
+ * optional half-open created-at window `created_after` (inclusive) /
+ * `created_before` (exclusive) ISO date-time bounds. All optional; derived from
+ * the generated `list-sessions` operation. The
  * generated `continuation_token` is `unknown` (the spec gives it no type), so
  * it is narrowed to `string | number | null` here — staging returns the cursor
  * as a number (and `null` when there is no next page), matching the narrowed

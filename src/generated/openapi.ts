@@ -1978,6 +1978,8 @@ export interface operations {
             query?: {
                 limit?: number;
                 continuation_token?: unknown;
+                created_after?: string | null;
+                created_before?: string | null;
             };
             header?: never;
             path: {
