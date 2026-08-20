@@ -14,12 +14,49 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: 'npm'
+
+      # Source PRs must leave package versioning to the release workflow. A
+      # manual bump can either make `npm version` fail with "Version not
+      # changed" or cause it to publish an unintended lower version.
+      - name: Reject package version bumps in source PRs
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if git diff --quiet "$BASE_SHA" "$HEAD_SHA" -- src/; then
+            echo "No source changes; package version policy does not apply."
+            exit 0
+          fi
+
+          read_version() {
+            git show "${1}:package.json" | node -e '
+              let input = "";
+              process.stdin.setEncoding("utf8");
+              process.stdin.on("data", (chunk) => { input += chunk; });
+              process.stdin.on("end", () => {
+                process.stdout.write(JSON.parse(input).version);
+              });
+            '
+          }
+
+          BASE_VERSION=$(read_version "$BASE_SHA")
+          HEAD_VERSION=$(read_version "$HEAD_SHA")
+
+          if [ "$BASE_VERSION" != "$HEAD_VERSION" ]; then
+            echo "::error::Source PRs must not change package.json version (${BASE_VERSION} -> ${HEAD_VERSION}). The release workflow calculates and applies the version bump after merge."
+            exit 1
+          fi
+
+          echo "package.json version remains ${HEAD_VERSION}; release automation owns the next bump."
 
       - name: Install dependencies
         run: npm ci
