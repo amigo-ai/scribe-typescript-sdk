@@ -273,6 +273,29 @@ describe('listSessions', () => {
     expect(calls[0]!.url).toBe(`${BASE}/v1/${WS}/sessions?limit=2`)
   })
 
+  it('threads created_after + created_before (half-open window) into the query string', async () => {
+    const { fetch, calls } = mockFetch([{ status: 200, body: { items: [], has_more: false } }])
+    await client(fetch).listSessions({
+      created_after: '2026-01-01T00:00:00Z',
+      created_before: '2026-02-01T00:00:00Z',
+    })
+    expect(calls[0]!.url).toBe(
+      `${BASE}/v1/${WS}/sessions?created_after=2026-01-01T00%3A00%3A00Z&created_before=2026-02-01T00%3A00%3A00Z`
+    )
+  })
+
+  it('forwards a lone created_after bound (either bound may be given alone)', async () => {
+    const { fetch, calls } = mockFetch([{ status: 200, body: { items: [], has_more: false } }])
+    await client(fetch).listSessions({ created_after: '2026-01-01T00:00:00Z' })
+    expect(calls[0]!.url).toBe(`${BASE}/v1/${WS}/sessions?created_after=2026-01-01T00%3A00%3A00Z`)
+  })
+
+  it('omits null created_at bounds instead of serializing "null"', async () => {
+    const { fetch, calls } = mockFetch([{ status: 200, body: { items: [], has_more: false } }])
+    await client(fetch).listSessions({ limit: 2, created_after: null, created_before: null })
+    expect(calls[0]!.url).toBe(`${BASE}/v1/${WS}/sessions?limit=2`)
+  })
+
   it('maps 403 to PermissionError', async () => {
     const { fetch } = mockFetch([{ status: 403, body: { message: 'wrong workspace' } }])
     await expect(client(fetch).listSessions()).rejects.toBeInstanceOf(PermissionError)
