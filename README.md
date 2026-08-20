@@ -316,7 +316,9 @@ third-party release action:
 1. Merge source-code changes under `src/` to `main` using
    [Conventional Commit](https://www.conventionalcommits.org/) titles. `fix:`
    produces a patch release, `feat:` a minor release, and a breaking-change
-   marker (`feat!:` or a `BREAKING CHANGE:` footer) a major release.
+   marker (`feat!:` or a `BREAKING CHANGE:` footer) a major release. Do not
+   change the `package.json` version in a source PR; CI enforces that the
+   release workflow remains the sole owner of version bumps.
 2. The workflow examines commit subjects and bodies since the latest `vX.Y.Z`
    tag, calculates the next version, and creates a tag-only commit containing
    the corresponding `package.json` / `package-lock.json` version bump. Changes
