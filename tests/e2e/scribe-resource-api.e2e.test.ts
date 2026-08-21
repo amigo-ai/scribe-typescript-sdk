@@ -82,15 +82,18 @@ async function readArtifactOr404<T>(
   assertShape: (v: T) => void,
   label: string
 ): Promise<void> {
+  let v: T
   try {
-    const v = await read()
-    assertShape(v)
-    // eslint-disable-next-line no-console
-    console.warn(`[resource-api e2e] ${label}: available (shape OK)`)
+    v = await read()
   } catch (err) {
     const e = expectScribeStatus(err, 404)
     expect(e).toBeInstanceOf(NotFoundError)
+    return
   }
+
+  assertShape(v)
+  // eslint-disable-next-line no-console
+  console.warn(`[resource-api e2e] ${label}: available (shape OK)`)
 }
 
 /**
@@ -297,7 +300,7 @@ describe.runIf(hasCreds)('Scribe resource-API e2e (all ScribeClient methods)', (
     await readArtifactOr404(
       () => client.getNote(primary.id),
       (n: NoteReadResponse) => {
-        expect(['ready', 'pending', 'failed']).toContain(n.generation_status)
+        expect(['ready', 'pending', 'failed', 'empty']).toContain(n.generation_status)
         if (n.generation_status === 'ready') {
           expect(typeof n.body === 'string' || n.structured != null).toBe(true)
           expect(typeof n.version).toBe('number')

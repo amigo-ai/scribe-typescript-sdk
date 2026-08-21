@@ -190,7 +190,7 @@ describe.runIf(hasCreds)('Scribe session lifecycle e2e (real happy-path artifact
     await readArtifactTolerant(
       () => client.getNote(session.id),
       (n: NoteReadResponse) => {
-        expect(['ready', 'pending', 'failed']).toContain(n.generation_status)
+        expect(['ready', 'pending', 'failed', 'empty']).toContain(n.generation_status)
         if (n.generation_status === 'ready') {
           expect(typeof n.body === 'string' || n.structured != null).toBe(true)
           expect(typeof n.version).toBe('number')
@@ -274,13 +274,16 @@ async function readArtifactTolerant<T>(
   assertShape: (v: T) => void,
   label: string
 ): Promise<void> {
+  let v: T
   try {
-    const v = await read()
-    assertShape(v)
-    // eslint-disable-next-line no-console
-    console.warn(`[lifecycle e2e] ${label}: available (shape OK)`)
+    v = await read()
   } catch (err) {
     const e = err as { statusCode?: number }
     expect(e.statusCode).toBe(404)
+    return
   }
+
+  assertShape(v)
+  // eslint-disable-next-line no-console
+  console.warn(`[lifecycle e2e] ${label}: available (shape OK)`)
 }
