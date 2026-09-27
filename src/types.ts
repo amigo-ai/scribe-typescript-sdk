@@ -333,7 +333,7 @@ export type TicketResponse = Schemas['TicketResponse']
 
 /**
  * The canonical AMD structured-note envelope (`StructuredNote`) — the only note
- * representation `PUT /sessions/{id}/note` accepts (`body` is deprecated). Carries
+ * representation `PUT /sessions/{id}/note` accepts. Carries
  * `schema_version`, `template_id`, `template_version`, the `values` map, and the
  * provider `review` state. A write is a complete-document replacement validated
  * against the pinned template before the compare-and-set.
@@ -365,8 +365,7 @@ export type StructuredNoteReview = Schemas['StructuredNoteReview']
  * versioned autosave. Send the full {@link StructuredNote} envelope in
  * `structured` (a complete-document replacement) plus the `base_version` the
  * client last read; a stale `base_version` loses the compare-and-set and returns
- * `409 version_conflict`. `body` is a **deprecated** compatibility field: a
- * `body` write is rejected with `422 deprecated_field`, never silently applied.
+ * `409 version_conflict`.
  */
 export type UpdateNoteRequest = Schemas['UpdateNoteRequest']
 

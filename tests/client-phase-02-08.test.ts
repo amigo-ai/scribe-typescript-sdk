@@ -165,16 +165,23 @@ describe('getZoomConnection / disconnectZoom / authorizeZoomOAuth', () => {
 })
 
 describe('putNote (versioned autosave)', () => {
-  it('PUTs the base_version + body and returns the new version', async () => {
+  const structured = {
+    schema_version: 1 as const,
+    template_id: 'amd-therapy-progress',
+    template_version: '1',
+    values: {},
+  }
+
+  it('PUTs the base_version + structured document and returns the new version', async () => {
     const { fetch, calls } = mockFetch([
       { status: 200, body: { version: 4, updated_at: '2026-07-30T00:00:00Z' } },
     ])
-    const result = await client(fetch).putNote('sess-1', { base_version: 3, body: 'edited' })
+    const result = await client(fetch).putNote('sess-1', { base_version: 3, structured })
 
     expect(result.version).toBe(4)
     expect(calls[0]!.url).toBe(`${BASE}/v1/${WS}/sessions/sess-1/note`)
     expect(calls[0]!.init?.method).toBe('PUT')
-    expect(JSON.parse(String(calls[0]!.init?.body))).toEqual({ base_version: 3, body: 'edited' })
+    expect(JSON.parse(String(calls[0]!.init?.body))).toEqual({ base_version: 3, structured })
   })
 
   it('maps a stale base_version 409 to ConflictError (version_conflict)', async () => {
@@ -182,7 +189,7 @@ describe('putNote (versioned autosave)', () => {
       { status: 409, body: { code: 'version_conflict', message: 'stale base_version' } },
     ])
     const err = await client(fetch)
-      .putNote('sess-1', { base_version: 1, body: 'x' })
+      .putNote('sess-1', { base_version: 1, structured })
       .catch((e: unknown) => e)
     expect(err).toBeInstanceOf(ConflictError)
     expect((err as ConflictError).errorCode).toBe('version_conflict')
@@ -193,7 +200,7 @@ describe('putNote (versioned autosave)', () => {
       { status: 409, body: { code: 'invalid_session_state', message: 'note is finalized' } },
     ])
     const err = await client(fetch)
-      .putNote('sess-1', { base_version: 5, body: 'x' })
+      .putNote('sess-1', { base_version: 5, structured })
       .catch((e: unknown) => e)
     expect(err).toBeInstanceOf(ConflictError)
     expect((err as ConflictError).errorCode).toBe('invalid_session_state')

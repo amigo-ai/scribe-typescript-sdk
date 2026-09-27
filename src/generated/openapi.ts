@@ -460,9 +460,9 @@ export interface paths {
          *     as a full document against the pinned template (phase-71 registry) BEFORE the compare-and-set.
          *     The CAS on `version` means two racing writers with the same base_version yield exactly one
          *     success and one 409 version_conflict. Rejected once the session is terminal (append-only, 409
-         *     invalid_session_state). 404 when no note has been generated yet. A `body` write is rejected with
-         *     422 deprecated_field (design §2.6); an unsupported template with 422 unsupported_note_template;
-         *     an invalid structured document with 422 validation_error carrying per-field `details`.
+         *     invalid_session_state). 404 when no note has been generated yet. An unsupported template is
+         *     rejected with 422 unsupported_note_template; a missing or invalid structured document with 422
+         *     validation_error carrying per-field `details`.
          */
         put: operations["update-session-note"];
         /** Generate Note */
@@ -1461,7 +1461,7 @@ export interface components {
         /**
          * StructuredNote
          * @description The canonical AMD structured-note envelope (design §2.3) — the only note
-         *     representation `PUT /sessions/{id}/note` accepts (`body` is deprecated, §2.6).
+         *     representation `PUT /sessions/{id}/note` accepts.
          *
          *     A write is a **complete-document replacement**, not a JSON merge: the client resends
          *     every value on each write, changing only what it means to change. The full document is
@@ -1614,17 +1614,11 @@ export interface components {
          *     The write is a **complete structured-document replacement**: send the full `structured`
          *     envelope (every value) on each write, not a partial patch. `base_version` is the version
          *     the client last read; a stale value loses the compare-and-set and returns
-         *     409 version_conflict. `body` is a **deprecated** compatibility field (design §2.6): a body
-         *     write is rejected with `422 deprecated_field` at the route, never silently applied.
+         *     409 version_conflict.
          */
         UpdateNoteRequest: {
             /** Base Version */
             base_version: number;
-            /**
-             * Body
-             * @deprecated
-             */
-            body?: string | null;
             structured?: components["schemas"]["StructuredNote"] | null;
         };
         /**
@@ -3494,7 +3488,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description A `body` write was attempted on the deprecated compatibility field (`deprecated_field`); the pinned template is unknown or the version does not match (`unsupported_note_template`); or the structured document failed template validation (`validation_error`, per-field `details`). */
+            /** @description The pinned template is unknown or the version does not match (`unsupported_note_template`), or the structured document failed template validation (`validation_error`, per-field `details`). */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -3728,7 +3722,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description A `body` write was attempted on the deprecated compatibility field (`deprecated_field`); the pinned template is unknown or the version does not match (`unsupported_note_template`); or the structured document failed template validation (`validation_error`, per-field `details`). */
+            /** @description The pinned template is unknown or the version does not match (`unsupported_note_template`), or the structured document failed template validation (`validation_error`, per-field `details`). */
             422: {
                 headers: {
                     [name: string]: unknown;

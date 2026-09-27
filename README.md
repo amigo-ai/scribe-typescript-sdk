@@ -29,7 +29,7 @@ Artifacts (note / summary / checklist / codes):
 
 - `getNote` — `GET /v1/{workspace_id}/sessions/{session_id}/note`
 - `generateNote` — `POST /v1/{workspace_id}/sessions/{session_id}/note` (pass a `note_type` `NoteTemplate`; `amd-*` templates emit the `StructuredNote` envelope, `structured` populated / `body` null)
-- `putNote` — `PUT /v1/{workspace_id}/sessions/{session_id}/note` — versioned autosave; send the full `StructuredNote` envelope in `structured` + `base_version` (complete-document replacement). `body` is **deprecated**: a `body` write is rejected with `422 deprecated_field`. Stale `base_version` → `409 version_conflict`, post-finalize → `409 invalid_session_state`
+- `putNote` — `PUT /v1/{workspace_id}/sessions/{session_id}/note` — versioned autosave; send the full `StructuredNote` envelope in `structured` + `base_version` (complete-document replacement). Stale `base_version` → `409 version_conflict`, post-finalize → `409 invalid_session_state`
 - `finalizeNote` — `POST /v1/{workspace_id}/sessions/{session_id}/note/finalize` (send the reviewed note's `base_version`; stale versions conflict and missing required template fields fail validation)
 - `getSummary` — `GET /v1/{workspace_id}/sessions/{session_id}/summary`
 - `generateSummary` — `POST /v1/{workspace_id}/sessions/{session_id}/summary`
@@ -262,7 +262,6 @@ with `retryAfterSeconds`). Transport failures throw `NetworkError`.
 
 Machine-readable domain error codes are surfaced on `ScribeError.errorCode`.
 Structured-note codes: `version_conflict` / `invalid_session_state` (409),
-`deprecated_field` (a `body` write on the deprecated compatibility field),
 `unsupported_note_template` (unknown/mismatched pinned template),
 `note_template_required` (session create/patch with no resolvable `visit_type`),
 `validation_error` (structured document failed template validation, per-field

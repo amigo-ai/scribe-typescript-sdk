@@ -612,12 +612,10 @@ export class ScribeClient {
    * {@link UpdateNoteResponse} carries the new `version` (n+1). Once the note is
    * finalized, further writes return `409 invalid_session_state`.
    *
-   * `body` is a **deprecated** compatibility field ({@link UpdateNoteRequest}):
-   * a `body` write is rejected up front with `422` and
-   * `errorCode === 'deprecated_field'` ({@link ValidationError}), never silently
-   * applied. An unsupported/mismatched pinned template returns `422
-   * unsupported_note_template`, and a structured document that fails template
-   * validation returns `422 validation_error` with per-field `details`.
+   * An unsupported/mismatched pinned template returns `422
+   * unsupported_note_template` ({@link ValidationError}), and a missing or
+   * invalid structured document returns `422 validation_error` with per-field
+   * `details`.
    */
   async putNote(
     sessionId: string,

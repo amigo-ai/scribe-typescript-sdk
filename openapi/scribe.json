@@ -1881,7 +1881,7 @@
       },
       "StructuredNote": {
         "additionalProperties": false,
-        "description": "The canonical AMD structured-note envelope (design \u00a72.3) \u2014 the only note\nrepresentation `PUT /sessions/{id}/note` accepts (`body` is deprecated, \u00a72.6).\n\nA write is a **complete-document replacement**, not a JSON merge: the client resends\nevery value on each write, changing only what it means to change. The full document is\nvalidated against the pinned template from the phase-71 registry before the CAS update\n(`validate_structured_note`).",
+        "description": "The canonical AMD structured-note envelope (design \u00a72.3) \u2014 the only note\nrepresentation `PUT /sessions/{id}/note` accepts.\n\nA write is a **complete-document replacement**, not a JSON merge: the client resends\nevery value on each write, changing only what it means to change. The full document is\nvalidated against the pinned template from the phase-71 registry before the CAS update\n(`validate_structured_note`).",
         "properties": {
           "review": {
             "$ref": "#/components/schemas/StructuredNoteReview"
@@ -2222,25 +2222,12 @@
         "type": "object"
       },
       "UpdateNoteRequest": {
-        "description": "Body of `PUT /sessions/{id}/note` \u2014 versioned structured-note autosave (design \u00a74.2).\n\nThe write is a **complete structured-document replacement**: send the full `structured`\nenvelope (every value) on each write, not a partial patch. `base_version` is the version\nthe client last read; a stale value loses the compare-and-set and returns\n409 version_conflict. `body` is a **deprecated** compatibility field (design \u00a72.6): a body\nwrite is rejected with `422 deprecated_field` at the route, never silently applied.",
+        "description": "Body of `PUT /sessions/{id}/note` \u2014 versioned structured-note autosave (design \u00a74.2).\n\nThe write is a **complete structured-document replacement**: send the full `structured`\nenvelope (every value) on each write, not a partial patch. `base_version` is the version\nthe client last read; a stale value loses the compare-and-set and returns\n409 version_conflict.",
         "properties": {
           "base_version": {
             "minimum": 1,
             "title": "Base Version",
             "type": "integer"
-          },
-          "body": {
-            "anyOf": [
-              {
-                "maxLength": 1000000,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "deprecated": true,
-            "title": "Body"
           },
           "structured": {
             "anyOf": [
@@ -5129,7 +5116,7 @@
         ]
       },
       "put": {
-        "description": "Versioned structured-note autosave with optimistic concurrency (design \u00a74.2).\n\nAccepts `{base_version, structured}` only: a complete structured-document replacement, validated\nas a full document against the pinned template (phase-71 registry) BEFORE the compare-and-set.\nThe CAS on `version` means two racing writers with the same base_version yield exactly one\nsuccess and one 409 version_conflict. Rejected once the session is terminal (append-only, 409\ninvalid_session_state). 404 when no note has been generated yet. A `body` write is rejected with\n422 deprecated_field (design \u00a72.6); an unsupported template with 422 unsupported_note_template;\nan invalid structured document with 422 validation_error carrying per-field `details`.",
+        "description": "Versioned structured-note autosave with optimistic concurrency (design \u00a74.2).\n\nAccepts `{base_version, structured}` only: a complete structured-document replacement, validated\nas a full document against the pinned template (phase-71 registry) BEFORE the compare-and-set.\nThe CAS on `version` means two racing writers with the same base_version yield exactly one\nsuccess and one 409 version_conflict. Rejected once the session is terminal (append-only, 409\ninvalid_session_state). 404 when no note has been generated yet. An unsupported template is\nrejected with 422 unsupported_note_template; a missing or invalid structured document with 422\nvalidation_error carrying per-field `details`.",
         "operationId": "update-session-note",
         "parameters": [
           {
@@ -5222,7 +5209,7 @@
                 }
               }
             },
-            "description": "A `body` write was attempted on the deprecated compatibility field (`deprecated_field`); the pinned template is unknown or the version does not match (`unsupported_note_template`); or the structured document failed template validation (`validation_error`, per-field `details`)."
+            "description": "The pinned template is unknown or the version does not match (`unsupported_note_template`), or the structured document failed template validation (`validation_error`, per-field `details`)."
           }
         },
         "summary": "Update Note",
@@ -5430,7 +5417,7 @@
                 }
               }
             },
-            "description": "A `body` write was attempted on the deprecated compatibility field (`deprecated_field`); the pinned template is unknown or the version does not match (`unsupported_note_template`); or the structured document failed template validation (`validation_error`, per-field `details`)."
+            "description": "The pinned template is unknown or the version does not match (`unsupported_note_template`), or the structured document failed template validation (`validation_error`, per-field `details`)."
           }
         },
         "summary": "Regenerate Note Section",
