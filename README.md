@@ -349,8 +349,10 @@ repo secrets):
 
 - **Configure a trusted publisher** for `@amigo-ai/scribe-typescript-sdk` on npmjs.com
   (Package → Settings → Trusted Publisher) pointing at this repository
-  (`amigo-ai/scribe-typescript-sdk`) and workflow (`.github/workflows/release.yml`).
-  This is the account/ops action that replaces provisioning a token.
+  (`concurrence-hq/scribe-typescript-sdk`) and workflow filename `release.yml`, with
+  no environment. This is the account/ops action that replaces provisioning a token.
+  `repository.url` in `package.json` must name the same GitHub repository, or npm
+  rejects the provenance.
 - The repository must be **public** for OIDC trusted publishing + provenance.
 
 Pre-publish validation can be run locally at any time:

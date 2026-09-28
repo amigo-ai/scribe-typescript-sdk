@@ -13,8 +13,10 @@ name: Release
 # One-time setup before the first publish (human/ops, done on npmjs.com — NOT a
 # repo secret): configure a **trusted publisher** for `@amigo-ai/scribe-typescript-sdk` at
 # https://www.npmjs.com/package/@amigo-ai/scribe-typescript-sdk/access pointing at this repo
-# (amigo-ai/scribe-typescript-sdk) and workflow (`.github/workflows/release.yml`).
-# The repository must be PUBLIC for OIDC provenance + trusted publishing.
+# (concurrence-hq/scribe-typescript-sdk) and workflow filename `release.yml`, with no
+# environment. The repository must be PUBLIC for OIDC provenance + trusted publishing.
+# `repository.url` in package.json must name the same GitHub repo; npm rejects the
+# provenance otherwise. The npm scope stays `@amigo-ai` (an npm org, not the GitHub org).
 #
 # Manual publishing from a v* tag and externally-created GitHub Releases remain
 # available as recovery paths. The version in package.json must equal the tag.
