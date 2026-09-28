@@ -10,13 +10,23 @@ name: Release
 # no npm token. `npm publish` authenticates via the workflow's `id-token: write`
 # OIDC token, and provenance is generated from the public Actions run.
 #
-# One-time setup before the first publish (human/ops, done on npmjs.com — NOT a
-# repo secret): configure a **trusted publisher** for `@amigo-ai/scribe-typescript-sdk` at
-# https://www.npmjs.com/package/@amigo-ai/scribe-typescript-sdk/access pointing at this repo
+# One-time setup (human/ops, done on npmjs.com — NOT a repo secret): configure a
+# **trusted publisher** for `@concurrence-hq/scribe-typescript-sdk` at
+# https://www.npmjs.com/package/@concurrence-hq/scribe-typescript-sdk/access pointing at this repo
 # (concurrence-hq/scribe-typescript-sdk) and workflow filename `release.yml`, with no
-# environment. The repository must be PUBLIC for OIDC provenance + trusted publishing.
-# `repository.url` in package.json must name the same GitHub repo; npm rejects the
-# provenance otherwise. The npm scope stays `@amigo-ai` (an npm org, not the GitHub org).
+# environment, and tick `npm publish` under Allowed actions (entries created after
+# 2026-09-03 default to stage-only, which fails with E403). The repository must be
+# PUBLIC for OIDC provenance + trusted publishing. `repository.url` in package.json
+# must name the same GitHub repo; npm rejects the provenance otherwise.
+#
+# npm only lets you configure a trusted publisher on a package that already exists
+# on the registry, so the first `@concurrence-hq/scribe-typescript-sdk` version is
+# published once by hand (with 2FA, no provenance) from its release tag; every later
+# release goes through this workflow with provenance.
+#
+# The npm scope is the `concurrence-hq` npm org. The package was previously published
+# as `@amigo-ai/scribe-typescript-sdk` (last version 0.15.1); that name is deprecated
+# and this workflow never publishes to it.
 #
 # Manual publishing from a v* tag and externally-created GitHub Releases remain
 # available as recovery paths. The version in package.json must equal the tag.
@@ -239,7 +249,7 @@ jobs:
       - name: Verify OIDC is available
         run: |
           if [ -z "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ] || [ -z "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" ]; then
-            echo "::error::GitHub OIDC token request variables are unavailable. This workflow publishes via npm trusted publishing only — ensure 'permissions: id-token: write' is set and a trusted publisher is configured for @amigo-ai/scribe-typescript-sdk on npmjs.com."
+            echo "::error::GitHub OIDC token request variables are unavailable. This workflow publishes via npm trusted publishing only — ensure 'permissions: id-token: write' is set and a trusted publisher is configured for @concurrence-hq/scribe-typescript-sdk on npmjs.com."
             exit 1
           fi
           echo "OIDC available; publishing via npm trusted publishing."
@@ -259,26 +269,26 @@ jobs:
           VIEW_FOUND=false
           for _ in 1 2; do
             : > "$VIEW_LOG"
-            if npm view "@amigo-ai/scribe-typescript-sdk@${VERSION}" version --json >"$VIEW_LOG" 2>&1; then
+            if npm view "@concurrence-hq/scribe-typescript-sdk@${VERSION}" version --json >"$VIEW_LOG" 2>&1; then
               VIEW_FOUND=true
               break
             fi
             if grep -Eq 'E404|"code"[[:space:]]*:[[:space:]]*"E404"|404 Not Found' "$VIEW_LOG"; then
               break
             fi
-            echo "npm view failed for @amigo-ai/scribe-typescript-sdk@${VERSION}; retrying once."
+            echo "npm view failed for @concurrence-hq/scribe-typescript-sdk@${VERSION}; retrying once."
             sleep 10
           done
 
           if [ "$VIEW_FOUND" = "true" ]; then
-            echo "::error::@amigo-ai/scribe-typescript-sdk@${VERSION} is already published on npm."
+            echo "::error::@concurrence-hq/scribe-typescript-sdk@${VERSION} is already published on npm."
             exit 1
           fi
 
           if grep -Eq 'E404|"code"[[:space:]]*:[[:space:]]*"E404"|404 Not Found' "$VIEW_LOG"; then
-            echo "@amigo-ai/scribe-typescript-sdk@${VERSION} is not published yet."
+            echo "@concurrence-hq/scribe-typescript-sdk@${VERSION} is not published yet."
           else
-            echo "::error::Unable to verify npm publication state for @amigo-ai/scribe-typescript-sdk@${VERSION}."
+            echo "::error::Unable to verify npm publication state for @concurrence-hq/scribe-typescript-sdk@${VERSION}."
             cat "$VIEW_LOG"
             exit 1
           fi
@@ -294,7 +304,7 @@ jobs:
           {
             echo "## Publish Summary"
             echo ""
-            echo "- Package: @amigo-ai/scribe-typescript-sdk@${{ steps.release.outputs.version }}"
+            echo "- Package: @concurrence-hq/scribe-typescript-sdk@${{ steps.release.outputs.version }}"
             echo "- Tag: ${{ steps.release.outputs.tag }}"
             echo "- Auth: npm trusted publishing (OIDC)"
             echo "- Provenance: requested"

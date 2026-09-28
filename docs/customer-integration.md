@@ -1,11 +1,11 @@
 # Scribe streaming — customer integration guide
 
 This is the single document a customer engineer follows to go from **zero → a
-working in-person Scribe recording** using `@amigo-ai/scribe-typescript-sdk`.
+working in-person Scribe recording** using `@concurrence-hq/scribe-typescript-sdk`.
 
 It integrates in-person Scribe streaming with the **split-trust** model: your
 **backend** is a confidential machine-to-machine (M2M) client that holds the
-secret and mints tokens; your **browser** runs `@amigo-ai/scribe-typescript-sdk` and streams
+secret and mints tokens; your **browser** runs `@concurrence-hq/scribe-typescript-sdk` and streams
 audio with only a short-lived, single-session **attach ticket**. The secret and
 the provider JWT never leave your server.
 
@@ -202,7 +202,7 @@ Session creation requires a canonical `visit_type` that resolves to a supported 
 Both the backend and the browser import from the same ESM-only package:
 
 ```bash
-npm i @amigo-ai/scribe-typescript-sdk
+npm i @concurrence-hq/scribe-typescript-sdk
 ```
 
 Requires Node.js ≥ 20 on the backend, and any modern browser (`fetch` +
@@ -313,7 +313,7 @@ subject is rejected. Only a full provider JWT can mint a ticket.
 
 ---
 
-## 4. Browser integration (`@amigo-ai/scribe-typescript-sdk`)
+## 4. Browser integration (`@concurrence-hq/scribe-typescript-sdk`)
 
 The browser uses `ScribeStreamClient` — the recording-independent WebSocket
 client. It attaches with an attach ticket, streams caller-supplied PCM16, and
@@ -402,7 +402,7 @@ with your workspace + M2M credentials; every method takes the clinician's email
 (from YOUR authenticated app session — never the browser).
 
 ```ts
-import { ScribeServerClient } from '@amigo-ai/scribe-typescript-sdk'
+import { ScribeServerClient } from '@concurrence-hq/scribe-typescript-sdk'
 
 const server = new ScribeServerClient({
   identityBaseUrl: 'https://api.platform.amigo.ai', // identity /token (mints)
@@ -465,8 +465,8 @@ against a socket that may never open. So gate capture on the `streaming` state
 (it also re-fires after a reconnect, and `paused`/`ended` tell you when to stop):
 
 ```ts
-import { ScribeStreamClient } from '@amigo-ai/scribe-typescript-sdk'
-import type { SttTranscriptSegment } from '@amigo-ai/scribe-typescript-sdk'
+import { ScribeStreamClient } from '@concurrence-hq/scribe-typescript-sdk'
+import type { SttTranscriptSegment } from '@concurrence-hq/scribe-typescript-sdk'
 
 // `sessionId` came from your createScribeSession backend response.
 async function record(sessionId: string) {
@@ -562,7 +562,7 @@ bounded to the one session by the audience + scope + `session_id` + owner checks
 `ScribeRecorder` is exported by the package and manages microphone capture and the streaming client together. Start it from a user action in a secure browser context after your application has obtained any required recording consent. Handle microphone permission failure and provide visible pause and end controls.
 
 ```ts
-import { ScribeRecorder } from '@amigo-ai/scribe-typescript-sdk'
+import { ScribeRecorder } from '@concurrence-hq/scribe-typescript-sdk'
 
 const recorder = new ScribeRecorder({
   sessionId,
