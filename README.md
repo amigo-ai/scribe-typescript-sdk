@@ -1,6 +1,12 @@
-# @amigo-ai/scribe-typescript-sdk
+# @concurrence-hq/scribe-typescript-sdk
 
 Framework-agnostic TypeScript SDK for the Amigo **Scribe** streaming service.
+
+> **Package renamed.** This SDK was previously published as
+> `@amigo-ai/scribe-typescript-sdk` (last version `0.15.1`). That name is
+> deprecated and receives no further releases — install
+> `@concurrence-hq/scribe-typescript-sdk` and update your imports. The API is
+> unchanged.
 
 [Developer Guide](https://docs.amigo.ai/developer-guide/platform-api/scribe) · [API Reference](https://docs.amigo.ai/api-reference/readme/scribe) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
 
@@ -84,7 +90,7 @@ clients:
 ## Install
 
 ```bash
-npm i @amigo-ai/scribe-typescript-sdk
+npm i @concurrence-hq/scribe-typescript-sdk
 ```
 
 Requires Node.js ≥ 20 (or any modern browser / runtime with `fetch` +
@@ -93,7 +99,7 @@ Requires Node.js ≥ 20 (or any modern browser / runtime with `fetch` +
 ## Usage
 
 ```ts
-import { ScribeClient, ServiceUnavailableError } from '@amigo-ai/scribe-typescript-sdk'
+import { ScribeClient, ServiceUnavailableError } from '@concurrence-hq/scribe-typescript-sdk'
 
 const scribe = new ScribeClient({
   // Scribe API (CRUD) host — production. (Staging: https://scribe-staging.platform.amigo.ai)
@@ -133,7 +139,7 @@ credentials and encapsulates the two mints + CRUD. **Never import it into a
 browser bundle.**
 
 ```ts
-import { ScribeServerClient } from '@amigo-ai/scribe-typescript-sdk'
+import { ScribeServerClient } from '@concurrence-hq/scribe-typescript-sdk'
 
 const server = new ScribeServerClient({
   identityBaseUrl: 'https://api.platform.amigo.ai', // identity /token (mints)
@@ -173,7 +179,7 @@ never holds a provider credential or mints tickets; it resolves a host + ticket
 from your backend via one of three seams (re-invoked on every reconnect):
 
 ```ts
-import { ScribeStreamClient } from '@amigo-ai/scribe-typescript-sdk'
+import { ScribeStreamClient } from '@concurrence-hq/scribe-typescript-sdk'
 
 const client = new ScribeStreamClient({
   sessionId: session.id,
@@ -215,7 +221,7 @@ chunk to `sendAudio`; `pause`/`resume`/`end` drive both capture and the client.
 Browser-only (needs `getUserMedia`/`AudioContext`).
 
 ```ts
-import { ScribeRecorder } from '@amigo-ai/scribe-typescript-sdk'
+import { ScribeRecorder } from '@concurrence-hq/scribe-typescript-sdk'
 
 const recorder = new ScribeRecorder({
   sessionId: session.id,
@@ -315,7 +321,7 @@ runtime bundle.
 ## Versioning & releases
 
 The SDK follows [semver](https://semver.org). It is published to npm as
-[`@amigo-ai/scribe-typescript-sdk`](https://www.npmjs.com/package/@amigo-ai/scribe-typescript-sdk) with
+[`@concurrence-hq/scribe-typescript-sdk`](https://www.npmjs.com/package/@concurrence-hq/scribe-typescript-sdk) with
 [npm provenance](https://docs.npmjs.com/generating-provenance-statements).
 
 Releases are automated directly by `.github/workflows/release.yml`, without a
@@ -344,15 +350,16 @@ Publishing uses **npm [trusted publishing](https://docs.npmjs.com/trusted-publis
 (OIDC)** — there is no npm token. The workflow authenticates with its
 `id-token: write` OIDC token, which also produces the provenance attestation.
 
-Before the first publish can succeed, two one-time setup steps are required (no
-repo secrets):
+CI publishing depends on two one-time setup steps (no repo secrets):
 
-- **Configure a trusted publisher** for `@amigo-ai/scribe-typescript-sdk` on npmjs.com
+- **Configure a trusted publisher** for `@concurrence-hq/scribe-typescript-sdk` on npmjs.com
   (Package → Settings → Trusted Publisher) pointing at this repository
   (`concurrence-hq/scribe-typescript-sdk`) and workflow filename `release.yml`, with
-  no environment. This is the account/ops action that replaces provisioning a token.
-  `repository.url` in `package.json` must name the same GitHub repository, or npm
-  rejects the provenance.
+  no environment, and tick `npm publish` under **Allowed actions**. This is the
+  account/ops action that replaces provisioning a token. `repository.url` in
+  `package.json` must name the same GitHub repository, or npm rejects the
+  provenance. npm only allows this on a package that already exists, so the
+  first `@concurrence-hq` version is published once by hand from its release tag.
 - The repository must be **public** for OIDC trusted publishing + provenance.
 
 Pre-publish validation can be run locally at any time:

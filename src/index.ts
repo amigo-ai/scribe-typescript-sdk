@@ -1,5 +1,5 @@
 /**
- * @amigo-ai/scribe-typescript-sdk — framework-agnostic TypeScript SDK for the Amigo Scribe
+ * @concurrence-hq/scribe-typescript-sdk — framework-agnostic TypeScript SDK for the Amigo Scribe
  * streaming service.
  *
  * Ships two layers:

@@ -1,8 +1,20 @@
 # Changelog
 
-All notable changes to `@amigo-ai/scribe-typescript-sdk` are documented here.
+All notable changes to `@concurrence-hq/scribe-typescript-sdk` (published as
+`@amigo-ai/scribe-typescript-sdk` through `0.15.1`) are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [0.16.0]
+
+### Changed
+
+- The package is now published as `@concurrence-hq/scribe-typescript-sdk`.
+  `@amigo-ai/scribe-typescript-sdk` is deprecated and receives no further
+  releases; existing installs keep working at their pinned versions. To migrate,
+  run `npm uninstall @amigo-ai/scribe-typescript-sdk && npm i @concurrence-hq/scribe-typescript-sdk`
+  and replace `'@amigo-ai/scribe-typescript-sdk'` with
+  `'@concurrence-hq/scribe-typescript-sdk'` in imports. No API changes.
 
 ## [0.14.0]
 
