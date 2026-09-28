@@ -15,13 +15,13 @@
     "streaming",
     "websocket"
   ],
-  "homepage": "https://github.com/amigo-ai/scribe-typescript-sdk#readme",
+  "homepage": "https://github.com/concurrence-hq/scribe-typescript-sdk#readme",
   "bugs": {
-    "url": "https://github.com/amigo-ai/scribe-typescript-sdk/issues"
+    "url": "https://github.com/concurrence-hq/scribe-typescript-sdk/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/amigo-ai/scribe-typescript-sdk.git"
+    "url": "git+https://github.com/concurrence-hq/scribe-typescript-sdk.git"
   },
   "license": "MIT",
   "author": "Amigo Inc.",

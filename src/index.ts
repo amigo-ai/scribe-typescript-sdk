@@ -11,6 +11,8 @@
  *    bytes. The exported ScribeRecorder supplies browser microphone capture, plus
  *    the pure transcript core (wire contract, {@link normalizeTurn},
  *    {@link transcriptReducer}, {@link buildWsUrl}).
+ *
+ * Source: https://github.com/concurrence-hq/scribe-typescript-sdk
  */
 
 // --- CRUD REST client ---
