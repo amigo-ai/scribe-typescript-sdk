@@ -62,7 +62,11 @@ describe('createSession', () => {
       artifacts: { transcript: 'pending', note: 'pending', summary: 'pending', codes: 'pending' },
     }
     const { fetch, calls } = mockFetch([{ status: 201, body: session }])
-    const result = await client(fetch).createSession({ external_id: 'appt-9', metadata: { a: 1 } })
+    const result = await client(fetch).createSession({
+      timezone: 'America/New_York',
+      external_id: 'appt-9',
+      metadata: { a: 1 },
+    })
 
     expect(result).toEqual(session)
     expect(result.id).toBe('sess-1') // ground-truth field is `id`, not `session_id`
@@ -74,20 +78,16 @@ describe('createSession', () => {
     expect(headers.Authorization).toBe(`Bearer ${TOKEN}`)
     expect(headers['Content-Type']).toBe('application/json')
     expect(JSON.parse(String(call.init?.body))).toEqual({
+      timezone: 'America/New_York',
       external_id: 'appt-9',
       metadata: { a: 1 },
     })
   })
 
-  it('defaults to an empty body when no input is given', async () => {
-    const { fetch, calls } = mockFetch([{ status: 201, body: { id: 'x' } }])
-    await client(fetch).createSession()
-    expect(JSON.parse(String(calls[0]!.init?.body))).toEqual({})
-  })
-
   it('serializes the session note-gen fields (first/last name, visit type, note template)', async () => {
     const { fetch, calls } = mockFetch([{ status: 201, body: { id: 'sess-1' } }])
     const input: CreateSessionRequest = {
+      timezone: 'America/New_York',
       first_name: 'Ada',
       last_name: 'Lovelace',
       visit_type: 'medical',
@@ -95,6 +95,7 @@ describe('createSession', () => {
     }
     await client(fetch).createSession(input)
     expect(JSON.parse(String(calls[0]!.init?.body))).toEqual({
+      timezone: 'America/New_York',
       first_name: 'Ada',
       last_name: 'Lovelace',
       visit_type: 'medical',
@@ -116,21 +117,26 @@ describe('createSession', () => {
     ]
     for (const note_template of templates) {
       const { fetch, calls } = mockFetch([{ status: 201, body: { id: 'sess-1' } }])
-      await client(fetch).createSession({ note_template })
-      expect(JSON.parse(String(calls[0]!.init?.body))).toEqual({ note_template })
+      await client(fetch).createSession({ timezone: 'America/New_York', note_template })
+      expect(JSON.parse(String(calls[0]!.init?.body))).toEqual({
+        timezone: 'America/New_York',
+        note_template,
+      })
     }
   })
 
   it('maps 409 to ConflictError', async () => {
     const { fetch } = mockFetch([{ status: 409, body: { message: 'external_id taken' } }])
-    await expect(client(fetch).createSession({ external_id: 'dup' })).rejects.toBeInstanceOf(
-      ConflictError
-    )
+    await expect(
+      client(fetch).createSession({ timezone: 'America/New_York', external_id: 'dup' })
+    ).rejects.toBeInstanceOf(ConflictError)
   })
 
   it('maps 401 to AuthenticationError', async () => {
     const { fetch } = mockFetch([{ status: 401, body: { message: 'bad token' } }])
-    await expect(client(fetch).createSession()).rejects.toBeInstanceOf(AuthenticationError)
+    await expect(
+      client(fetch).createSession({ timezone: 'America/New_York' })
+    ).rejects.toBeInstanceOf(AuthenticationError)
   })
 
   it('maps a 422 use_zoom_endpoint rejection to ValidationError carrying the errorCode', async () => {
@@ -146,7 +152,7 @@ describe('createSession', () => {
       },
     ])
     const err = await client(fetch)
-      .createSession({ external_id: 'appt-9' })
+      .createSession({ timezone: 'America/New_York', external_id: 'appt-9' })
       .catch(e => e)
     expect(err).toBeInstanceOf(ValidationError)
     expect(err.errorCode).toBe('use_zoom_endpoint')
@@ -818,7 +824,7 @@ describe('getAppointment', () => {
 describe('workspace + token handling', () => {
   it('allows per-call workspace override', async () => {
     const { fetch, calls } = mockFetch([{ status: 201, body: { id: 'x' } }])
-    await client(fetch).createSession({}, { workspaceId: 'other-ws' })
+    await client(fetch).createSession({ timezone: 'America/New_York' }, { workspaceId: 'other-ws' })
     expect(calls[0]!.url).toBe(`${BASE}/v1/other-ws/sessions`)
   })
 
@@ -830,7 +836,7 @@ describe('workspace + token handling', () => {
       token: async () => 'fresh-jwt',
       fetch,
     })
-    await c.createSession()
+    await c.createSession({ timezone: 'America/New_York' })
     const headers = calls[0]!.init?.headers as Record<string, string>
     expect(headers.Authorization).toBe('Bearer fresh-jwt')
   })
@@ -838,7 +844,7 @@ describe('workspace + token handling', () => {
   it('strips a trailing slash from baseUrl', async () => {
     const { fetch, calls } = mockFetch([{ status: 201, body: { id: 'x' } }])
     const c = new ScribeClient({ baseUrl: `${BASE}/`, token: TOKEN, workspaceId: WS, fetch })
-    await c.createSession()
+    await c.createSession({ timezone: 'America/New_York' })
     expect(calls[0]!.url).toBe(`${BASE}/v1/${WS}/sessions`)
   })
 })
@@ -851,7 +857,7 @@ describe('transport errors', () => {
       workspaceId: WS,
       fetch: rejectingFetch(new Error('ECONNREFUSED')),
     })
-    const err = await c.createSession().catch(e => e)
+    const err = await c.createSession({ timezone: 'America/New_York' }).catch(e => e)
     expect(err).toBeInstanceOf(NetworkError)
     expect((err as NetworkError).request?.method).toBe('POST')
   })

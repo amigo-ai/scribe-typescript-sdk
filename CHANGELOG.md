@@ -5,6 +5,22 @@ All notable changes to `@concurrence-hq/scribe-typescript-sdk` (published as
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **Breaking:** `createSession` (and `ServerScribeClient.createSession`) now
+  require an `input` argument carrying the new required `timezone` field — the
+  session's IANA local timezone, which the Scribe API persists and renders the
+  AMD writeback times/dates in (ehr-note-writeback phase 33). The field is typed
+  from the OpenAPI schema as the IANA timezone-name union (e.g. the browser's
+  `Intl.DateTimeFormat().resolvedOptions().timeZone`), so a plain `string` needs
+  a cast. `ZoomSessionRequest` gains the same required `timezone`.
+
+### Added
+
+- `SessionResponse.local_timezone` — the IANA zone persisted on the session.
+
 ## [0.16.0]
 
 ### Changed

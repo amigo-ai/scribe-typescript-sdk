@@ -287,6 +287,7 @@ describe.runIf(hasToken)('Scribe assist surface e2e (provider JWT → staging)',
     // 1. Create a session and stream REAL speech so STT yields a transcript a
     //    note (and thus the assist surface) can be built from.
     session = await client.createSession({
+      timezone: 'America/New_York',
       external_id: e2eExternalId('assist'),
       visit_type: 'therapy-follow-up',
     })

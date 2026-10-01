@@ -41,6 +41,7 @@ describe('createZoomSession', () => {
     const { fetch, calls } = mockFetch([{ status: 201, body }])
     const result = await client(fetch).createZoomSession({
       meeting_link: 'https://zoom.us/j/123',
+      timezone: 'America/New_York',
       disclosure: { enabled: true },
     })
 
@@ -49,6 +50,7 @@ describe('createZoomSession', () => {
     expect(calls[0]!.init?.method).toBe('POST')
     expect(JSON.parse(String(calls[0]!.init?.body))).toEqual({
       meeting_link: 'https://zoom.us/j/123',
+      timezone: 'America/New_York',
       disclosure: { enabled: true },
     })
   })
@@ -58,6 +60,7 @@ describe('createZoomSession', () => {
     const { fetch, calls } = mockFetch([{ status: 201, body }])
     await client(fetch).createZoomSession({
       meeting_link: 'https://zoom.us/j/123',
+      timezone: 'America/New_York',
       disclosure: { enabled: true },
       first_name: 'Ada',
       last_name: 'Lovelace',
@@ -67,6 +70,7 @@ describe('createZoomSession', () => {
 
     expect(JSON.parse(String(calls[0]!.init?.body))).toEqual({
       meeting_link: 'https://zoom.us/j/123',
+      timezone: 'America/New_York',
       disclosure: { enabled: true },
       first_name: 'Ada',
       last_name: 'Lovelace',
@@ -80,6 +84,7 @@ describe('createZoomSession', () => {
     const { fetch, calls } = mockFetch([{ status: 201, body }])
     await client(fetch).createZoomSession({
       meeting_link: 'https://zoom.us/j/123',
+      timezone: 'America/New_York',
       disclosure: { enabled: true },
       first_name: null,
       last_name: null,
@@ -89,6 +94,7 @@ describe('createZoomSession', () => {
 
     expect(JSON.parse(String(calls[0]!.init?.body))).toEqual({
       meeting_link: 'https://zoom.us/j/123',
+      timezone: 'America/New_York',
       disclosure: { enabled: true },
       first_name: null,
       last_name: null,
@@ -100,7 +106,11 @@ describe('createZoomSession', () => {
   it('maps 409 (not connected / external_id collision) to ConflictError', async () => {
     const { fetch } = mockFetch([{ status: 409, body: { code: 'zoom_not_connected' } }])
     await expect(
-      client(fetch).createZoomSession({ meeting_link: 'x', disclosure: { enabled: false } })
+      client(fetch).createZoomSession({
+        meeting_link: 'x',
+        disclosure: { enabled: false },
+        timezone: 'America/New_York',
+      })
     ).rejects.toBeInstanceOf(ConflictError)
   })
 })

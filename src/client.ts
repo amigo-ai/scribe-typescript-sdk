@@ -128,7 +128,7 @@ export class ScribeClient {
    * `mode` type is narrowed to `'in_person'` so this is also a compile-time error.
    */
   async createSession(
-    input: CreateSessionRequest = {},
+    input: CreateSessionRequest,
     options?: CallOptions
   ): Promise<SessionResponse> {
     const workspaceId = this.resolveWorkspaceId(options)
