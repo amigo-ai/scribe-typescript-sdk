@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Breaking:** `createSession` (and `ServerScribeClient.createSession`) now
   require an `input` argument carrying the new required `timezone` field — the
   session's IANA local timezone, which the Scribe API persists and renders the
-  AMD writeback times/dates in (ehr-note-writeback phase 33). The field is typed
+  AMD writeback times/dates in. The field is typed
   from the OpenAPI schema as the IANA timezone-name union (e.g. the browser's
   `Intl.DateTimeFormat().resolvedOptions().timeZone`), so a plain `string` needs
   a cast. `ZoomSessionRequest` gains the same required `timezone`.
