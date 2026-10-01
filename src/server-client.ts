@@ -177,7 +177,7 @@ export class ScribeServerClient {
   /** Create a session as `providerEmail` (`POST /v1/{ws}/sessions`). */
   async createSession(
     providerEmail: string,
-    input?: CreateSessionRequest
+    input: CreateSessionRequest
   ): Promise<SessionResponse> {
     return this.scribe(providerEmail).createSession(input)
   }

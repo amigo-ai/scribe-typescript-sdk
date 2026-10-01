@@ -176,6 +176,7 @@ describe.runIf(hasCreds)('Scribe streaming e2e (M2M → create → allocate → 
 
     // 2. Create the session as the clinician (server client mints + creates).
     const session = await server.createSession(providerEmail!, {
+      timezone: 'America/New_York',
       external_id: `sdk-stream-e2e-${Date.now()}`,
       visit_type: 'therapy-follow-up',
       metadata: { source: 'scribe-typescript-sdk streaming e2e' },

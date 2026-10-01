@@ -114,6 +114,7 @@ describe.runIf(hasCreds)('Scribe session lifecycle e2e (real happy-path artifact
 
     // 1. create session
     const session = await client.createSession({
+      timezone: 'America/New_York',
       external_id: e2eExternalId('lifecycle'),
       visit_type: 'therapy-follow-up',
       metadata: { source: 'scribe-typescript-sdk lifecycle e2e' },

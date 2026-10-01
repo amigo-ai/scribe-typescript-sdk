@@ -115,6 +115,8 @@ const scribe = new ScribeClient({
 const session = await scribe.createSession({
   external_id: 'appointment-42',
   visit_type: 'medical', // use the canonical visit type configured for this workspace
+  // Required IANA zone the AMD writeback renders in; the browser's own zone:
+  timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
   metadata: { clinic: 'north' },
 })
 
@@ -153,6 +155,7 @@ const server = new ScribeServerClient({
 const session = await server.createSession(clinicianEmail, {
   external_id: 'appointment-42',
   visit_type: 'medical', // requires a matching configured note template
+  timezone: 'America/New_York', // required IANA zone (the clinician's local zone)
 })
 
 // Encapsulating helper: one allocate + one ticket mint → the browser-safe bundle.
