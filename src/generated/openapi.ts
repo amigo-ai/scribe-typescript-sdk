@@ -1255,6 +1255,7 @@ export interface components {
         /** FinalizeNoteResponse */
         FinalizeNoteResponse: {
             note: components["schemas"]["NoteResponse"];
+            writeback_status: components["schemas"]["WritebackStatus"];
         };
         /** GenerateNoteRequest */
         GenerateNoteRequest: {
@@ -1366,6 +1367,7 @@ export interface components {
             updated_at?: string | null;
             /** Version */
             version?: number | null;
+            writeback_status: components["schemas"]["WritebackStatus"];
         };
         /** NoteResponse */
         NoteResponse: {
@@ -1403,7 +1405,7 @@ export interface components {
             version: number;
         };
         /** @enum {string} */
-        NoteTemplate: "full" | "medical" | "soap" | "dap" | "birp" | "amd-psych-intake" | "amd-psych-progress" | "amd-therapy-intake" | "amd-therapy-progress";
+        NoteTemplate: "full" | "medical" | "soap" | "dap" | "birp" | "amd-psych-intake" | "amd-psych-intake-ip" | "amd-psych-progress" | "amd-psych-progress-ip" | "amd-therapy-intake" | "amd-therapy-intake-ip" | "amd-therapy-progress" | "amd-therapy-progress-ip";
         /** @enum {string} */
         NoteValueSource: "scribe" | "clinician";
         /**
@@ -1722,6 +1724,8 @@ export interface components {
         };
         /** @enum {string} */
         VisitType: "psych-intake" | "psych-follow-up" | "therapy-intake" | "therapy-follow-up" | "medical";
+        /** @enum {string} */
+        WritebackStatus: "succeeded" | "pending" | "disabled" | "not_attempted";
         /**
          * ZoomAuthorizeResponse
          * @description Response of `POST /zoom/oauth/authorize`.

@@ -200,7 +200,11 @@ export type GenerateNoteRequest = Schemas['GenerateNoteRequest']
 /** Response from generate-note (`GeneratedNoteResponse`) — the note plus its generation metadata. */
 export type GeneratedNoteResponse = Schemas['GeneratedNoteResponse']
 
-/** Response from finalize-note (`FinalizeNoteResponse`) — the signed/finalized note. */
+/**
+ * Response from finalize-note (`FinalizeNoteResponse`) — the signed/finalized
+ * note plus its {@link WritebackStatus} (`writeback_status`), the terminal-or-
+ * in-progress state of the EHR note writeback triggered by finalization.
+ */
 export type FinalizeNoteResponse = Schemas['FinalizeNoteResponse']
 
 /** A session's summary (`SummaryResponse`). */
@@ -242,6 +246,16 @@ export type GenerationReadStatus = Schemas['GenerationReadStatus']
  * superset of {@link GenerationReadStatus}, carried by {@link NoteReadResponse}.
  */
 export type NoteGenerationReadStatus = Schemas['NoteGenerationReadStatus']
+
+/**
+ * EHR note-writeback state (`WritebackStatus`) reported on
+ * {@link FinalizeNoteResponse} and {@link NoteReadResponse} as `writeback_status`:
+ * - `succeeded` — the note was written back to the EHR.
+ * - `pending` — writeback is in progress / enqueued.
+ * - `disabled` — writeback is not enabled for this session/workspace.
+ * - `not_attempted` — no writeback has been attempted (e.g. note not finalized).
+ */
+export type WritebackStatus = Schemas['WritebackStatus']
 
 /** Which artifact a generation job produces (`ArtifactKind`). */
 export type ArtifactKind = Schemas['ArtifactKind']
@@ -304,7 +318,8 @@ export function isGenerationEnqueued(
  * `generation_status === 'ready'`; while `pending` the poller returns the status
  * with null artifact fields, and `failed` carries an {@link ErrorDetail}. Note
  * the persisted `version` (used as the `base_version` for
- * {@link ScribeClient.putNote} / {@link ScribeClient.finalizeNote}).
+ * {@link ScribeClient.putNote} / {@link ScribeClient.finalizeNote}). Also carries
+ * the {@link WritebackStatus} (`writeback_status`) for the note's EHR writeback.
  */
 export type NoteReadResponse = Schemas['NoteReadResponse']
 

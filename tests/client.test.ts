@@ -349,6 +349,17 @@ describe('getNote', () => {
     expect(calls[0]!.init?.body).toBeUndefined()
   })
 
+  it('passes through the writeback_status field', async () => {
+    const note = {
+      session_id: 'sess-1',
+      generation_status: 'ready',
+      writeback_status: 'succeeded',
+    }
+    const { fetch } = mockFetch([{ status: 200, body: note }])
+    const result = await client(fetch).getNote('sess-1')
+    expect(result.writeback_status).toBe('succeeded')
+  })
+
   it('maps 404 (not yet generated) to NotFoundError', async () => {
     const { fetch } = mockFetch([{ status: 404, body: { message: 'no note' } }])
     await expect(client(fetch).getNote('sess-1')).rejects.toBeInstanceOf(NotFoundError)
@@ -413,6 +424,16 @@ describe('finalizeNote', () => {
     const headers = calls[0]!.init?.headers as Record<string, string>
     expect(headers['Content-Type']).toBe('application/json')
     expect(JSON.parse(String(calls[0]!.init?.body))).toEqual({ base_version: 3 })
+  })
+
+  it('passes through the writeback_status field', async () => {
+    const finalized = {
+      note: { session_id: 'sess-1', status: 'submitted', version: 3 },
+      writeback_status: 'pending',
+    }
+    const { fetch } = mockFetch([{ status: 200, body: finalized }])
+    const result = await client(fetch).finalizeNote('sess-1', { base_version: 3 })
+    expect(result.writeback_status).toBe('pending')
   })
 
   it('maps a stale base_version 409 to ConflictError (version_conflict)', async () => {
