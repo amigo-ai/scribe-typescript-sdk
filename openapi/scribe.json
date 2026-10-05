@@ -1811,10 +1811,14 @@
         "properties": {
           "note": {
             "$ref": "#/components/schemas/NoteResponse"
+          },
+          "writeback_status": {
+            "$ref": "#/components/schemas/WritebackStatus"
           }
         },
         "required": [
-          "note"
+          "note",
+          "writeback_status"
         ],
         "title": "FinalizeNoteResponse",
         "type": "object"
@@ -2144,10 +2148,14 @@
               }
             ],
             "title": "Version"
+          },
+          "writeback_status": {
+            "$ref": "#/components/schemas/WritebackStatus"
           }
         },
         "required": [
-          "generation_status"
+          "generation_status",
+          "writeback_status"
         ],
         "title": "NoteReadResponse",
         "type": "object"
@@ -2247,9 +2255,13 @@
           "dap",
           "birp",
           "amd-psych-intake",
+          "amd-psych-intake-ip",
           "amd-psych-progress",
+          "amd-psych-progress-ip",
           "amd-therapy-intake",
-          "amd-therapy-progress"
+          "amd-therapy-intake-ip",
+          "amd-therapy-progress",
+          "amd-therapy-progress-ip"
         ],
         "type": "string"
       },
@@ -3043,6 +3055,15 @@
           "therapy-intake",
           "therapy-follow-up",
           "medical"
+        ],
+        "type": "string"
+      },
+      "WritebackStatus": {
+        "enum": [
+          "succeeded",
+          "pending",
+          "disabled",
+          "not_attempted"
         ],
         "type": "string"
       },

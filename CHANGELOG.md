@@ -19,6 +19,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `writeback_status` — a new required `WritebackStatus`
+  (`'succeeded' | 'pending' | 'disabled' | 'not_attempted'`) field on
+  `FinalizeNoteResponse` (finalize-note) and `NoteReadResponse` (get-note),
+  reporting the state of the note's EHR writeback. `WritebackStatus` is now
+  exported as a named public type. It is **not** present on the shared
+  `NoteResponse` / generate-note response. Additive to the read/finalize shapes.
 - `SessionResponse.local_timezone` — the IANA zone persisted on the session.
 
 ## [0.16.0]
