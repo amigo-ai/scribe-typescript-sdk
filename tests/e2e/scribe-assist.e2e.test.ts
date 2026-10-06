@@ -299,7 +299,7 @@ describe.runIf(hasToken)('Scribe assist surface e2e (provider JWT → staging)',
     expect(segmentCount).toBeGreaterThan(0)
 
     // 2. Generate the note → read its ready version (needed as base_version).
-    await client.generateNote(session.id, { note_type: 'soap' })
+    await client.generateNote(session.id, { note_type: 'amd-psych-progress' })
     const note = await pollNoteReady(client, session.id)
     const baseVersion = note.version as number
     expect(baseVersion).toBeGreaterThanOrEqual(1)

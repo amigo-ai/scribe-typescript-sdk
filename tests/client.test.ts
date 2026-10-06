@@ -90,30 +90,29 @@ describe('createSession', () => {
       timezone: 'America/New_York',
       first_name: 'Ada',
       last_name: 'Lovelace',
-      visit_type: 'medical',
-      note_template: 'soap',
+      visit_type: 'psych-intake',
+      note_template: 'amd-psych-progress',
     }
     await client(fetch).createSession(input)
     expect(JSON.parse(String(calls[0]!.init?.body))).toEqual({
       timezone: 'America/New_York',
       first_name: 'Ada',
       last_name: 'Lovelace',
-      visit_type: 'medical',
-      note_template: 'soap',
+      visit_type: 'psych-intake',
+      note_template: 'amd-psych-progress',
     })
   })
 
   it('accepts every NoteTemplate enum value on create', async () => {
     const templates: NoteTemplate[] = [
-      'full',
-      'medical',
-      'soap',
-      'dap',
-      'birp',
       'amd-psych-intake',
+      'amd-psych-intake-ip',
       'amd-psych-progress',
+      'amd-psych-progress-ip',
       'amd-therapy-intake',
+      'amd-therapy-intake-ip',
       'amd-therapy-progress',
+      'amd-therapy-progress-ip',
     ]
     for (const note_template of templates) {
       const { fetch, calls } = mockFetch([{ status: 201, body: { id: 'sess-1' } }])
@@ -339,7 +338,7 @@ describe('getSession', () => {
 
 describe('getNote', () => {
   it('GETs the note path and returns the note', async () => {
-    const note = { session_id: 'sess-1', type: 'soap', status: 'draft', body: 'text' }
+    const note = { session_id: 'sess-1', type: 'amd-psych-progress', status: 'draft', body: 'text' }
     const { fetch, calls } = mockFetch([{ status: 200, body: note }])
     const result = await client(fetch).getNote('sess-1')
 
@@ -376,7 +375,7 @@ describe('generateNote', () => {
     const generated = { note: { session_id: 'sess-1', body: 'x' }, generation: { id: 'gen-1' } }
     const { fetch, calls } = mockFetch([{ status: 200, body: generated }])
     const result = await client(fetch).generateNote('sess-1', {
-      note_type: 'soap',
+      note_type: 'amd-psych-progress',
       instructions: 'be concise',
     })
 
@@ -386,29 +385,29 @@ describe('generateNote', () => {
     const headers = calls[0]!.init?.headers as Record<string, string>
     expect(headers['Content-Type']).toBe('application/json')
     expect(JSON.parse(String(calls[0]!.init?.body))).toEqual({
-      note_type: 'soap',
+      note_type: 'amd-psych-progress',
       instructions: 'be concise',
     })
   })
 
   it('serializes a note_type-only body', async () => {
     const { fetch, calls } = mockFetch([{ status: 200, body: { note: {}, generation: {} } }])
-    await client(fetch).generateNote('sess-1', { note_type: 'soap' })
-    expect(JSON.parse(String(calls[0]!.init?.body))).toEqual({ note_type: 'soap' })
+    await client(fetch).generateNote('sess-1', { note_type: 'amd-psych-progress' })
+    expect(JSON.parse(String(calls[0]!.init?.body))).toEqual({ note_type: 'amd-psych-progress' })
   })
 
   it('maps 404 to NotFoundError', async () => {
     const { fetch } = mockFetch([{ status: 404, body: { message: 'no session' } }])
-    await expect(client(fetch).generateNote('nope', { note_type: 'soap' })).rejects.toBeInstanceOf(
-      NotFoundError
-    )
+    await expect(
+      client(fetch).generateNote('nope', { note_type: 'amd-psych-progress' })
+    ).rejects.toBeInstanceOf(NotFoundError)
   })
 
   it('requires a sessionId', async () => {
     const { fetch } = mockFetch([{}])
-    await expect(client(fetch).generateNote('', { note_type: 'soap' })).rejects.toBeInstanceOf(
-      ConfigurationError
-    )
+    await expect(
+      client(fetch).generateNote('', { note_type: 'amd-psych-progress' })
+    ).rejects.toBeInstanceOf(ConfigurationError)
   })
 })
 
@@ -596,13 +595,13 @@ describe('updateSession', () => {
     const session = {
       id: 'sess-1',
       status: 'created',
-      visit_type: 'medical',
+      visit_type: 'psych-intake',
       external_appointment_id: 'appt-9',
     }
     const { fetch, calls } = mockFetch([{ status: 200, body: session }])
     const result = await client(fetch).updateSession('sess-1', {
       external_appointment_id: 'appt-9',
-      visit_type: 'medical',
+      visit_type: 'psych-intake',
     })
 
     expect(result).toEqual(session)
@@ -612,7 +611,7 @@ describe('updateSession', () => {
     expect(headers['Content-Type']).toBe('application/json')
     expect(JSON.parse(String(calls[0]!.init?.body))).toEqual({
       external_appointment_id: 'appt-9',
-      visit_type: 'medical',
+      visit_type: 'psych-intake',
     })
   })
 
@@ -628,14 +627,14 @@ describe('updateSession', () => {
       first_name: 'Grace',
       last_name: 'Hopper',
       visit_type: 'psych-follow-up',
-      note_template: 'medical',
+      note_template: 'amd-psych-intake',
     }
     await client(fetch).updateSession('sess-1', patch)
     expect(JSON.parse(String(calls[0]!.init?.body))).toEqual({
       first_name: 'Grace',
       last_name: 'Hopper',
       visit_type: 'psych-follow-up',
-      note_template: 'medical',
+      note_template: 'amd-psych-intake',
     })
   })
 
