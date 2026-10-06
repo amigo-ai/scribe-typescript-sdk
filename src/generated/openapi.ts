@@ -1261,8 +1261,7 @@ export interface components {
         GenerateNoteRequest: {
             /** Instructions */
             instructions?: string | null;
-            /** @default medical */
-            note_type: components["schemas"]["NoteTemplate"];
+            note_type?: components["schemas"]["NoteTemplate"] | null;
         };
         /** GeneratedActionsResponse */
         GeneratedActionsResponse: {
@@ -1405,7 +1404,7 @@ export interface components {
             version: number;
         };
         /** @enum {string} */
-        NoteTemplate: "full" | "medical" | "soap" | "dap" | "birp" | "amd-psych-intake" | "amd-psych-intake-ip" | "amd-psych-progress" | "amd-psych-progress-ip" | "amd-therapy-intake" | "amd-therapy-intake-ip" | "amd-therapy-progress" | "amd-therapy-progress-ip";
+        NoteTemplate: "amd-psych-intake" | "amd-psych-intake-ip" | "amd-psych-progress" | "amd-psych-progress-ip" | "amd-therapy-intake" | "amd-therapy-intake-ip" | "amd-therapy-progress" | "amd-therapy-progress-ip";
         /** @enum {string} */
         NoteValueSource: "scribe" | "clinician";
         /**
@@ -1723,7 +1722,7 @@ export interface components {
             type: string;
         };
         /** @enum {string} */
-        VisitType: "psych-intake" | "psych-follow-up" | "therapy-intake" | "therapy-follow-up" | "medical";
+        VisitType: "psych-intake" | "psych-follow-up" | "therapy-intake" | "therapy-follow-up";
         /** @enum {string} */
         WritebackStatus: "succeeded" | "pending" | "disabled" | "not_attempted";
         /**
