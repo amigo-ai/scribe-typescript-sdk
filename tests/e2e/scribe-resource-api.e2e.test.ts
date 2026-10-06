@@ -315,7 +315,7 @@ describe.runIf(hasCreds)('Scribe resource-API e2e (all ScribeClient methods)', (
 
   it('generateNote(no transcript) → generated note / enqueue or a typed error (404 not_found)', async () => {
     await generateOr4xx(
-      () => client.generateNote(primary.id, { note_type: 'soap' }),
+      () => client.generateNote(primary.id, { note_type: 'amd-psych-progress' }),
       v => {
         if (isGenerationEnqueued(v)) {
           expect(v.generation.status).toBeTruthy()
@@ -331,7 +331,7 @@ describe.runIf(hasCreds)('Scribe resource-API e2e (all ScribeClient methods)', (
 
   it('generateNote(unknown session) → 404 NotFoundError', async () => {
     await expect(
-      client.generateNote(randomUuid(), { note_type: 'medical' })
+      client.generateNote(randomUuid(), { note_type: 'amd-psych-progress' })
     ).rejects.toBeInstanceOf(NotFoundError)
   })
 

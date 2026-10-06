@@ -234,7 +234,7 @@ describe.runIf(hasCreds)('Scribe session lifecycle e2e (real happy-path artifact
 
 async function generateNoteTolerant(client: ScribeClient, sessionId: string): Promise<void> {
   try {
-    const v = await client.generateNote(sessionId, { note_type: 'soap' })
+    const v = await client.generateNote(sessionId, { note_type: 'amd-psych-progress' })
     if (!isGenerationEnqueued(v)) {
       expect(v.note).toBeTruthy()
       expect(v.generation).toBeTruthy()

@@ -374,14 +374,14 @@ describe('generate* async 202/200 envelope', () => {
       generation: { id: 'g', model_provider: 'openai' },
     }
     const { fetch } = mockFetch([{ status: 200, body }])
-    const result = await client(fetch).generateNote('sess-1', { note_type: 'soap' })
+    const result = await client(fetch).generateNote('sess-1', { note_type: 'amd-psych-progress' })
     expect(isGenerationEnqueued(result)).toBe(false)
   })
 
   it('returns the enqueue envelope on 202 (isGenerationEnqueued === true)', async () => {
     const body = { generation: { id: 'gen-1', artifact_kind: 'note', status: 'pending' } }
     const { fetch } = mockFetch([{ status: 202, body }])
-    const result = await client(fetch).generateNote('sess-1', { note_type: 'soap' })
+    const result = await client(fetch).generateNote('sess-1', { note_type: 'amd-psych-progress' })
     expect(isGenerationEnqueued(result)).toBe(true)
     if (isGenerationEnqueued(result)) {
       expect(result.generation.status).toBe('pending')
