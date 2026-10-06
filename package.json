@@ -1,6 +1,6 @@
 {
   "name": "@concurrence-hq/scribe-typescript-sdk",
-  "version": "0.13.0",
+  "version": "1.2.0",
   "description": "Framework-agnostic TypeScript SDK for the Amigo Scribe streaming service",
   "publishConfig": {
     "access": "public",
