@@ -1838,8 +1838,14 @@
             "title": "Instructions"
           },
           "note_type": {
-            "$ref": "#/components/schemas/NoteTemplate",
-            "default": "medical"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NoteTemplate"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "title": "GenerateNoteRequest",
@@ -2249,11 +2255,6 @@
       },
       "NoteTemplate": {
         "enum": [
-          "full",
-          "medical",
-          "soap",
-          "dap",
-          "birp",
           "amd-psych-intake",
           "amd-psych-intake-ip",
           "amd-psych-progress",
@@ -3053,8 +3054,7 @@
           "psych-intake",
           "psych-follow-up",
           "therapy-intake",
-          "therapy-follow-up",
-          "medical"
+          "therapy-follow-up"
         ],
         "type": "string"
       },
