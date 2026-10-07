@@ -2225,6 +2225,17 @@
             "title": "Carry Forward Available",
             "type": "array"
           },
+          "clinician_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clinician Name"
+          },
           "error": {
             "anyOf": [
               {

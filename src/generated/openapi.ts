@@ -1407,6 +1407,8 @@ export interface components {
             body?: string | null;
             /** Carry Forward Available */
             carry_forward_available?: components["schemas"]["CarryForwardAvailableField"][];
+            /** Clinician Name */
+            clinician_name?: string | null;
             error?: components["schemas"]["ErrorDetail"] | null;
             /** Generated At */
             generated_at?: string | null;
