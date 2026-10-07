@@ -519,6 +519,56 @@
         "title": "BotStatusEvent",
         "type": "object"
       },
+      "CarryForwardAvailableField": {
+        "description": "One AMD field with a value available to carry forward from the patient's last signed note\n(ehr-note-writeback phase 62).\n\nFLAG-ONLY: this surface names the field (+ its human label and the prior signed note the value would\ncarry from) so the web can badge \"carries forward from your last note\" while the clinician edits the\nnote — it NEVER carries the field's value. `source_note_id` is an id and `source_signed_at` a date, so\nno carried chart/patient content (PHI) crosses this API. Built at note read from the EHR\ncarry-forward fetch phase 60 already runs, keyed by the `amd_field_code` scribe maps note fields to.",
+        "properties": {
+          "amd_field_code": {
+            "maxLength": 256,
+            "title": "Amd Field Code",
+            "type": "string"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "maxLength": 512,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "source_note_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Note Id"
+          },
+          "source_signed_at": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Signed At"
+          }
+        },
+        "required": [
+          "amd_field_code"
+        ],
+        "title": "CarryForwardAvailableField",
+        "type": "object"
+      },
       "ChecklistItemStateResponse": {
         "properties": {
           "category": {
@@ -1792,6 +1842,33 @@
         "title": "ErrorResponse",
         "type": "object"
       },
+      "FieldValueSource": {
+        "enum": [
+          "transcript",
+          "session_meta",
+          "carried_forward",
+          "amd_identity_autowrite"
+        ],
+        "type": "string"
+      },
+      "FieldWritebackDisposition": {
+        "enum": [
+          "written",
+          "omitted"
+        ],
+        "type": "string"
+      },
+      "FieldWritebackReason": {
+        "enum": [
+          "written_from_transcript",
+          "written_session_meta",
+          "omitted_carried_forward",
+          "omitted_identity_autowritten",
+          "omitted_empty_no_value",
+          "not_populated"
+        ],
+        "type": "string"
+      },
       "FinalizeNoteRequest": {
         "description": "Body of `POST /sessions/{id}/note/finalize` (V340).\n\n`base_version` is the note version the provider is finalizing; a stale value returns\n409 version_conflict. Server-side gate validation runs on the *stored* document, not the\nrequest, so a client cannot bypass required-field gates.",
         "properties": {
@@ -1809,6 +1886,13 @@
       },
       "FinalizeNoteResponse": {
         "properties": {
+          "field_dispositions": {
+            "items": {
+              "$ref": "#/components/schemas/NoteFieldDisposition"
+            },
+            "title": "Field Dispositions",
+            "type": "array"
+          },
           "note": {
             "$ref": "#/components/schemas/NoteResponse"
           },
@@ -2017,6 +2101,98 @@
         "title": "HTTPValidationError",
         "type": "object"
       },
+      "NoteFieldDisposition": {
+        "description": "What a note writeback did with one AMD field, and why (ehr-note-writeback phase 61).\n\nOne entry per AMD field the backend knows about for the note template — joined from what scribe sent\n(written), the EHR carry-forward response (carried → omitted, with the source signed note),\nthe identity block (identity AMD auto-writes), the per-visit session codes (written session-meta), and\nthe template's known fields (not-populated). `display_value` carries the carried / identity value the\nEHR uses (set for `carried_forward` + `amd_identity_autowrite`; a written field's value already lives\nin the note document, so it is omitted here). PHI: `display_value` is chart/patient content — returned\nto the authenticated clinician like the note body, but NEVER logged.",
+        "properties": {
+          "amd_field_code": {
+            "maxLength": 256,
+            "title": "Amd Field Code",
+            "type": "string"
+          },
+          "display_value": {
+            "anyOf": [
+              {
+                "maxLength": 100000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Value"
+          },
+          "disposition": {
+            "$ref": "#/components/schemas/FieldWritebackDisposition"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "maxLength": 512,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "reason": {
+            "$ref": "#/components/schemas/FieldWritebackReason"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FieldValueSource"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source_note_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Note Id"
+          },
+          "source_signed_at": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Signed At"
+          },
+          "source_template_name": {
+            "anyOf": [
+              {
+                "maxLength": 512,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Template Name"
+          }
+        },
+        "required": [
+          "amd_field_code",
+          "disposition",
+          "reason"
+        ],
+        "title": "NoteFieldDisposition",
+        "type": "object"
+      },
       "NoteGenerationReadStatus": {
         "enum": [
           "ready",
@@ -2041,6 +2217,13 @@
             ],
             "deprecated": true,
             "title": "Body"
+          },
+          "carry_forward_available": {
+            "items": {
+              "$ref": "#/components/schemas/CarryForwardAvailableField"
+            },
+            "title": "Carry Forward Available",
+            "type": "array"
           },
           "error": {
             "anyOf": [
@@ -3995,7 +4178,7 @@
     },
     "/v1/{workspace_id}/appointments": {
       "get": {
-        "description": "List appointments over a rolling date-anchored window (workspace + provider read-scoped).\n\nPhase 38 ships a deliberate static stub sourced from the superscribe-web seed (see\n`src/appointments.py`); the response contract is stable so the source can later swap to a\ndownstream customer API via a managed External Integration without a wire change. TESTING STOPGAP\n(phase 45a, SUPERSEDED BY PHASE 45): the stub emits a rolling window `[today - back, today +\nforward]` (env-tunable, defaults 14/30 → 360 items max) instead of today-only, so date-pinned\nappointment ids stay in-list across day-rollovers and the phase-41 session join keeps linking a\nsession created on a prior day. Paginated to mirror the sibling `list-sessions` endpoint\n(offset-based `limit` + opaque `continuation_token`); consumers page the full window and bucket\ninto past/today/upcoming client-side.\n\nOptional date-range filter (phase 34): `start_after` (INCLUSIVE) and `start_before` (EXCLUSIVE) are\ntimezone-aware ISO-8601 datetime bounds on the appointment `start` (normalized to UTC; a naive,\ndate-only or malformed bound is a 422), forming the half-open window `[start_after, start_before)`.\nEither may be given alone; both omitted preserves the legacy behavior. The filter is applied\nserver-side over the window BEFORE pagination, so a client that needs only its today+tomorrow slice\nfetches exactly that instead of paging a wide window and filtering client-side. An inverted range or\na span wider than `_MAX_APPOINTMENT_RANGE` returns 400 `invalid_date_range`.\n\nEHR-backed workspaces (ehr-note-writeback phase 03 — the Thriveworks workspace with its flag on)\nfetch exactly the client's window, so BOTH `start_after` and `start_before` are REQUIRED there\n(omitting either is 400 `invalid_date_range`); the window is never derived server-side.",
+        "description": "List appointments over a rolling date-anchored window (workspace + provider read-scoped).\n\nPhase 38 ships a deliberate static stub sourced from the superscribe-web seed (see\n`src/appointments.py`); the response contract is stable so the source can later swap to a\ndownstream customer API via a managed External Integration without a wire change. TESTING STOPGAP\n(phase 45a, SUPERSEDED BY PHASE 45): the stub emits a rolling window `[today - back, today +\nforward]` (env-tunable, defaults 14/30 → 360 items max) instead of today-only, so date-pinned\nappointment ids stay in-list across day-rollovers and the phase-41 session join keeps linking a\nsession created on a prior day. Paginated to mirror the sibling `list-sessions` endpoint\n(offset-based `limit` + opaque `continuation_token`); consumers page the full window and bucket\ninto past/today/upcoming client-side.\n\nOptional date-range filter (phase 34): `start_after` (INCLUSIVE) and `start_before` (EXCLUSIVE) are\ntimezone-aware ISO-8601 datetime bounds on the appointment `start` (normalized to UTC; a naive,\ndate-only or malformed bound is a 422), forming the half-open window `[start_after, start_before)`.\nEither may be given alone; both omitted preserves the legacy behavior. The filter is applied\nserver-side over the window BEFORE pagination, so a client that needs only its today+tomorrow slice\nfetches exactly that instead of paging a wide window and filtering client-side. An inverted range or\na span wider than `_MAX_APPOINTMENT_RANGE` returns 400 `invalid_date_range`.\n\nEHR-backed workspaces (ehr-note-writeback phase 03 — the EHR-integrated workspace with its flag on)\nfetch exactly the client's window, so BOTH `start_after` and `start_before` are REQUIRED there\n(omitting either is 400 `invalid_date_range`); the window is never derived server-side.",
         "operationId": "list-appointments",
         "parameters": [
           {
@@ -4123,7 +4306,7 @@
     },
     "/v1/{workspace_id}/appointments/{appointment_id}": {
       "get": {
-        "description": "Get one appointment by id. `start_after` / `start_before` (same semantics as `list-appointments`)\nare ignored by the static seed. EHR-backed workspaces search that window; omitting both searches the\nUTC dates today - 2 days through today + 5 days, giving only one is 400 `invalid_date_range`, and a\nfailed EHR schedule fetch is 503 `appointments_unavailable`.",
+        "description": "Get one appointment by id. An EHR-backed workspace reads the single appointment straight from the\nEHR by id (ehr-note-writeback phase 59) — no schedule-window fetch-and-scan, so a busy provider's\nwindow can't time out, the root cause of the `appointments_unavailable` 503. A genuine missing\nappointment is 404; a failed EHR fetch is 503 `appointments_unavailable` (never masked as not-found).\nEvery other workspace resolves the id against the static seed.",
         "operationId": "get-appointment",
         "parameters": [
           {
@@ -4145,40 +4328,6 @@
               "title": "Appointment Id",
               "type": "string"
             }
-          },
-          {
-            "in": "query",
-            "name": "start_after",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "date-time",
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Start After"
-            }
-          },
-          {
-            "in": "query",
-            "name": "start_before",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "date-time",
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Start Before"
-            }
           }
         ],
         "responses": {
@@ -4191,16 +4340,6 @@
               }
             },
             "description": "Successful Response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "The `start_after` / `start_before` date range is inverted or too wide, or incomplete on an EHR-backed workspace (list-appointments requires both bounds there; get-appointment takes both or neither)."
           },
           "401": {
             "content": {
@@ -4260,7 +4399,7 @@
                 }
               }
             },
-            "description": "The EHR schedule could not be fetched (`appointments_unavailable`), or the linked session is temporarily unavailable."
+            "description": "The EHR appointment could not be fetched (`appointments_unavailable`), or the linked session is temporarily unavailable."
           }
         },
         "summary": "Get Appointment",
@@ -6602,7 +6741,7 @@
     },
     "/v1/{workspace_id}/sessions/{session_id}/note/finalize": {
       "post": {
-        "description": "Server-authoritative finalize (SPEC §6.1 P4): atomically submit the note + complete the session.\n\nPhase 178: finalize accepts ANY stored note shape — there is no note-content/structural validation\ngate. A note with missing required fields, no approved diagnosis, `amd_confirmed=false`, and/or a\nstructurally-off document finalizes 200. The only non-validation mechanics still enforced are\nownership/scope, `base_version` optimistic concurrency, already-submitted idempotency (200), and the\natomic session completion. An already-submitted note is an idempotent 200. A terminal\ncancelled/failed session is 409 invalid_session_state and the note submit is rolled back with it (the\ntwo writes are one unit of work).\n\nEHR writeback (ehr-note-writeback phase 07): with `scribe.note-writeback-enabled` on for the workspace,\nthe note is POSTed to the Thriveworks EHR inside the same transaction, after the session completes and\nbefore commit. Any writeback failure is `ehr_writeback_failed` (500 when the request can't be built, 502\nwhen the EHR call fails) and rolls both writes back (note stays draft); success commits a `note_writebacks` provenance row with them. The already-submitted\nshort-circuit means a successful finalize never re-posts. `scribe.thriveworks-amd-submit-enabled` sets\n`submitToAmd`: off, the writeback is a dry run (stored + mapped by Thriveworks, not written to AMD).",
+        "description": "Server-authoritative finalize (SPEC §6.1 P4): atomically submit the note + complete the session.\n\nPhase 178: finalize accepts ANY stored note shape — there is no note-content/structural validation\ngate. A note with missing required fields, no approved diagnosis, `amd_confirmed=false`, and/or a\nstructurally-off document finalizes 200. The only non-validation mechanics still enforced are\nownership/scope, `base_version` optimistic concurrency, already-submitted idempotency (200), and the\natomic session completion. An already-submitted note is an idempotent 200. A terminal\ncancelled/failed session is 409 invalid_session_state and the note submit is rolled back with it (the\ntwo writes are one unit of work).\n\nEHR writeback (ehr-note-writeback phase 07): with `scribe.note-writeback-enabled` on for the workspace,\nthe note is POSTed to the EHR inside the same transaction, after the session completes and\nbefore commit. Any writeback failure is `ehr_writeback_failed` (500 when the request can't be built, 502\nwhen the EHR call fails) and rolls both writes back (note stays draft); success commits a `note_writebacks` provenance row with them. The already-submitted\nshort-circuit means a successful finalize never re-posts. A separate submit flag sets\n`submitToAmd`: off, the writeback is a dry run (stored + mapped by the EHR, not written to AMD).",
         "operationId": "finalize-session-note",
         "parameters": [
           {

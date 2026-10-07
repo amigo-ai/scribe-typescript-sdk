@@ -67,7 +67,7 @@ export interface paths {
          *     fetches exactly that instead of paging a wide window and filtering client-side. An inverted range or
          *     a span wider than `_MAX_APPOINTMENT_RANGE` returns 400 `invalid_date_range`.
          *
-         *     EHR-backed workspaces (ehr-note-writeback phase 03 — the Thriveworks workspace with its flag on)
+         *     EHR-backed workspaces (ehr-note-writeback phase 03 — the EHR-integrated workspace with its flag on)
          *     fetch exactly the client's window, so BOTH `start_after` and `start_before` are REQUIRED there
          *     (omitting either is 400 `invalid_date_range`); the window is never derived server-side.
          */
@@ -89,10 +89,11 @@ export interface paths {
         };
         /**
          * Get Appointment
-         * @description Get one appointment by id. `start_after` / `start_before` (same semantics as `list-appointments`)
-         *     are ignored by the static seed. EHR-backed workspaces search that window; omitting both searches the
-         *     UTC dates today - 2 days through today + 5 days, giving only one is 400 `invalid_date_range`, and a
-         *     failed EHR schedule fetch is 503 `appointments_unavailable`.
+         * @description Get one appointment by id. An EHR-backed workspace reads the single appointment straight from the
+         *     EHR by id (ehr-note-writeback phase 59) — no schedule-window fetch-and-scan, so a busy provider's
+         *     window can't time out, the root cause of the `appointments_unavailable` 503. A genuine missing
+         *     appointment is 404; a failed EHR fetch is 503 `appointments_unavailable` (never masked as not-found).
+         *     Every other workspace resolves the id against the static seed.
          */
         get: operations["get-appointment"];
         put?: never;
@@ -540,11 +541,11 @@ export interface paths {
          *     two writes are one unit of work).
          *
          *     EHR writeback (ehr-note-writeback phase 07): with `scribe.note-writeback-enabled` on for the workspace,
-         *     the note is POSTed to the Thriveworks EHR inside the same transaction, after the session completes and
+         *     the note is POSTed to the EHR inside the same transaction, after the session completes and
          *     before commit. Any writeback failure is `ehr_writeback_failed` (500 when the request can't be built, 502
          *     when the EHR call fails) and rolls both writes back (note stays draft); success commits a `note_writebacks` provenance row with them. The already-submitted
-         *     short-circuit means a successful finalize never re-posts. `scribe.thriveworks-amd-submit-enabled` sets
-         *     `submitToAmd`: off, the writeback is a dry run (stored + mapped by Thriveworks, not written to AMD).
+         *     short-circuit means a successful finalize never re-posts. A separate submit flag sets
+         *     `submitToAmd`: off, the writeback is a dry run (stored + mapped by the EHR, not written to AMD).
          */
         post: operations["finalize-session-note"];
         delete?: never;
@@ -1017,6 +1018,27 @@ export interface components {
              */
             state: "joining" | "waiting_for_host" | "waiting_for_participant" | "playing_disclosure" | "listening" | "paused" | "idle" | "leaving" | "done" | "error";
         };
+        /**
+         * CarryForwardAvailableField
+         * @description One AMD field with a value available to carry forward from the patient's last signed note
+         *     (ehr-note-writeback phase 62).
+         *
+         *     FLAG-ONLY: this surface names the field (+ its human label and the prior signed note the value would
+         *     carry from) so the web can badge "carries forward from your last note" while the clinician edits the
+         *     note — it NEVER carries the field's value. `source_note_id` is an id and `source_signed_at` a date, so
+         *     no carried chart/patient content (PHI) crosses this API. Built at note read from the EHR
+         *     carry-forward fetch phase 60 already runs, keyed by the `amd_field_code` scribe maps note fields to.
+         */
+        CarryForwardAvailableField: {
+            /** Amd Field Code */
+            amd_field_code: string;
+            /** Label */
+            label?: string | null;
+            /** Source Note Id */
+            source_note_id?: number | null;
+            /** Source Signed At */
+            source_signed_at?: string | null;
+        };
         /** ChecklistItemStateResponse */
         ChecklistItemStateResponse: {
             /** Category */
@@ -1240,6 +1262,12 @@ export interface components {
             /** Message */
             message: string;
         };
+        /** @enum {string} */
+        FieldValueSource: "transcript" | "session_meta" | "carried_forward" | "amd_identity_autowrite";
+        /** @enum {string} */
+        FieldWritebackDisposition: "written" | "omitted";
+        /** @enum {string} */
+        FieldWritebackReason: "written_from_transcript" | "written_session_meta" | "omitted_carried_forward" | "omitted_identity_autowritten" | "omitted_empty_no_value" | "not_populated";
         /**
          * FinalizeNoteRequest
          * @description Body of `POST /sessions/{id}/note/finalize` (V340).
@@ -1254,6 +1282,8 @@ export interface components {
         };
         /** FinalizeNoteResponse */
         FinalizeNoteResponse: {
+            /** Field Dispositions */
+            field_dispositions?: components["schemas"]["NoteFieldDisposition"][];
             note: components["schemas"]["NoteResponse"];
             writeback_status: components["schemas"]["WritebackStatus"];
         };
@@ -1331,6 +1361,35 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
+        /**
+         * NoteFieldDisposition
+         * @description What a note writeback did with one AMD field, and why (ehr-note-writeback phase 61).
+         *
+         *     One entry per AMD field the backend knows about for the note template — joined from what scribe sent
+         *     (written), the EHR carry-forward response (carried → omitted, with the source signed note),
+         *     the identity block (identity AMD auto-writes), the per-visit session codes (written session-meta), and
+         *     the template's known fields (not-populated). `display_value` carries the carried / identity value the
+         *     EHR uses (set for `carried_forward` + `amd_identity_autowrite`; a written field's value already lives
+         *     in the note document, so it is omitted here). PHI: `display_value` is chart/patient content — returned
+         *     to the authenticated clinician like the note body, but NEVER logged.
+         */
+        NoteFieldDisposition: {
+            /** Amd Field Code */
+            amd_field_code: string;
+            /** Display Value */
+            display_value?: string | null;
+            disposition: components["schemas"]["FieldWritebackDisposition"];
+            /** Label */
+            label?: string | null;
+            reason: components["schemas"]["FieldWritebackReason"];
+            source?: components["schemas"]["FieldValueSource"] | null;
+            /** Source Note Id */
+            source_note_id?: number | null;
+            /** Source Signed At */
+            source_signed_at?: string | null;
+            /** Source Template Name */
+            source_template_name?: string | null;
+        };
         /** @enum {string} */
         NoteGenerationReadStatus: "ready" | "pending" | "failed" | "empty";
         /**
@@ -1346,6 +1405,8 @@ export interface components {
              * @deprecated
              */
             body?: string | null;
+            /** Carry Forward Available */
+            carry_forward_available?: components["schemas"]["CarryForwardAvailableField"][];
             error?: components["schemas"]["ErrorDetail"] | null;
             /** Generated At */
             generated_at?: string | null;
@@ -1986,10 +2047,7 @@ export interface operations {
     };
     "get-appointment": {
         parameters: {
-            query?: {
-                start_after?: string | null;
-                start_before?: string | null;
-            };
+            query?: never;
             header?: never;
             path: {
                 workspace_id: string;
@@ -2006,15 +2064,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AppointmentResponse"];
-                };
-            };
-            /** @description The `start_after` / `start_before` date range is inverted or too wide, or incomplete on an EHR-backed workspace (list-appointments requires both bounds there; get-appointment takes both or neither). */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
             /** @description Bearer token is absent or invalid. */
@@ -2062,7 +2111,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description The EHR schedule could not be fetched (`appointments_unavailable`), or the linked session is temporarily unavailable. */
+            /** @description The EHR appointment could not be fetched (`appointments_unavailable`), or the linked session is temporarily unavailable. */
             503: {
                 headers: {
                     [name: string]: unknown;
