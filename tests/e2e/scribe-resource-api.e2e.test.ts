@@ -14,11 +14,13 @@
  * fixed-scope CI M2M client cannot mint a token lacking `read_own`, so these are
  * documented as manual — see the `todo`s below and the PR checklist).
  *
- * Zero-residue: sessions are created with an `sdk-e2e-*` external id, are never
- * streamed (so they stay "dangling" and are auto-reaped by the phase-06 reaper),
- * and NO grants / M2M clients are created. There is no session-delete endpoint
- * (filed as a follow-up), so teardown records + logs the created ids rather than
- * deleting them.
+ * Zero-residue: sessions are created with an `sdk-e2e-*` external id and are
+ * CANCELLED in `afterAll` (best-effort `cancelSession` via the shared
+ * `teardownSessions` helper) so the backend's no-activity watchdog never reaps a
+ * never-streamed session as "failed" on the shared provider. NO grants / M2M
+ * clients are created. There is no session-delete endpoint (filed as a
+ * follow-up), so teardown cancels (guarded → terminal `cancelled`) rather than
+ * deleting.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import {
@@ -39,7 +41,15 @@ import type {
   SummaryReadResponse,
   TranscriptResponse,
 } from '../../src'
-import { e2eExternalId, env, hasCreds, makeServerClient, randomUuid, sleep } from './harness'
+import {
+  e2eExternalId,
+  env,
+  hasCreds,
+  makeServerClient,
+  randomUuid,
+  sleep,
+  teardownSessions,
+} from './harness'
 
 const SESSION_STATUSES = new Set([
   'created',
@@ -158,14 +168,13 @@ describe.runIf(hasCreds)('Scribe resource-API e2e (all ScribeClient methods)', (
     primary = await createTracked('primary')
   }, 60_000)
 
-  afterAll(() => {
-    // No session-delete endpoint exists (follow-up filed) — dangling sessions
-    // self-reap. Record what we created for the zero-residue audit trail.
-    // eslint-disable-next-line no-console
-    console.warn(
-      `[resource-api e2e] created ${createdSessionIds.length} sdk-e2e session(s) ` +
-        `(auto-reaped; no grants/M2M created): ${createdSessionIds.join(', ')}`
-    )
+  afterAll(async () => {
+    // Zero-residue: cancel every session we created so the backend's no-activity
+    // watchdog never reaps a never-streamed session as "failed" on the shared
+    // provider. Best-effort — teardown swallows terminal/not-found rejections.
+    if (client) {
+      await teardownSessions(client, createdSessionIds, 'resource-api e2e')
+    }
   })
 
   // --- createSession -------------------------------------------------------

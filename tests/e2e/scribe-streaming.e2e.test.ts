@@ -39,6 +39,7 @@ import {
   WS_CONNECT_PATH,
 } from '../../src'
 import type { ScribeStreamState, SttTranscriptSegment } from '../../src'
+import { teardownSessions } from './harness'
 
 const scribeBaseUrl = process.env.SCRIBE_E2E_BASE_URL
 const identityBaseUrl = process.env.SCRIBE_E2E_IDENTITY_BASE_URL
@@ -137,6 +138,10 @@ async function waitForState(
 
 describe.runIf(hasCreds)('Scribe streaming e2e (M2M → create → allocate → stream → end)', () => {
   let server: ScribeServerClient
+  // Zero-residue: track every created session so afterAll can cancel it. A
+  // stream leg that 503s (Fleet exhausted) leaves a never-streamed session that
+  // the watchdog would otherwise reap as "failed" on the shared provider.
+  const createdSessionIds: string[] = []
 
   beforeAll(async () => {
     if (!hasWebSocket) {
@@ -181,6 +186,7 @@ describe.runIf(hasCreds)('Scribe streaming e2e (M2M → create → allocate → 
       visit_type: 'therapy-follow-up',
       metadata: { source: 'scribe-typescript-sdk streaming e2e' },
     })
+    createdSessionIds.push(session.id)
     expect(session.id).toBeTruthy()
 
     // 3 + 4. Stream via the SDK, wiring the browser client's unified
@@ -265,7 +271,13 @@ describe.runIf(hasCreds)('Scribe streaming e2e (M2M → create → allocate → 
     expect(client.getState()).toBe('ended')
   }, 120_000)
 
-  afterAll(() => {
-    // Nothing to tear down: sessions expire on their own; end() closed the WS.
+  afterAll(async () => {
+    // Zero-residue: cancel every created session (idempotent + best-effort). A
+    // streamed+ended session is already in-review and returns 409 (swallowed); a
+    // never-streamed one is cancelled so the watchdog never fails it. end() has
+    // already closed the WS, so the REST cancel won't hit `session_streaming`.
+    if (server) {
+      await teardownSessions(server.scribe(providerEmail!), createdSessionIds, 'streaming e2e')
+    }
   })
 })
