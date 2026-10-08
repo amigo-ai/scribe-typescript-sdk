@@ -1021,13 +1021,17 @@ export interface components {
         /**
          * CarryForwardAvailableField
          * @description One AMD field with a value available to carry forward from the patient's last signed note
-         *     (ehr-note-writeback phase 62).
+         *     (ehr-note-writeback phases 62 + 69).
          *
-         *     FLAG-ONLY: this surface names the field (+ its human label and the prior signed note the value would
-         *     carry from) so the web can badge "carries forward from your last note" while the clinician edits the
-         *     note — it NEVER carries the field's value. `source_note_id` is an id and `source_signed_at` a date, so
-         *     no carried chart/patient content (PHI) crosses this API. Built at note read from the EHR
-         *     carry-forward fetch phase 60 already runs, keyed by the `amd_field_code` scribe maps note fields to.
+         *     Names the field (+ its human label and the prior signed note the value carries from) AND the carried
+         *     display `value` itself, so the web can pre-fill the editing view with what the EHR would carry and let the
+         *     clinician edit it (phase 70). Built at note read from the EHR carry-forward fetch phase 60 already runs,
+         *     keyed by the `amd_field_code` scribe maps note fields to.
+         *
+         *     PHI: `value` is the carried chart/patient display content (reversal approved 2026-10-08). It is returned
+         *     to the authenticated clinician like the note body, but must be masked on the web until the clinician opts
+         *     in (phase 70) and must NEVER be logged — PHI-safe logging surfaces codes/counts only. `source_note_id`
+         *     (an id) and `source_signed_at` (a date) are provenance, not PHI.
          */
         CarryForwardAvailableField: {
             /** Amd Field Code */
@@ -1038,6 +1042,8 @@ export interface components {
             source_note_id?: number | null;
             /** Source Signed At */
             source_signed_at?: string | null;
+            /** Value */
+            value?: string | null;
         };
         /** ChecklistItemStateResponse */
         ChecklistItemStateResponse: {
@@ -1263,11 +1269,11 @@ export interface components {
             message: string;
         };
         /** @enum {string} */
-        FieldValueSource: "transcript" | "session_meta" | "carried_forward" | "amd_identity_autowrite";
+        FieldValueSource: "transcript" | "clinician_edit" | "session_meta" | "carried_forward" | "amd_identity_autowrite";
         /** @enum {string} */
         FieldWritebackDisposition: "written" | "omitted";
         /** @enum {string} */
-        FieldWritebackReason: "written_from_transcript" | "written_session_meta" | "omitted_carried_forward" | "omitted_identity_autowritten" | "omitted_empty_no_value" | "not_populated";
+        FieldWritebackReason: "written_from_transcript" | "written_from_clinician_edit" | "written_session_meta" | "omitted_carried_forward" | "omitted_identity_autowritten" | "omitted_empty_no_value" | "not_populated";
         /**
          * FinalizeNoteRequest
          * @description Body of `POST /sessions/{id}/note/finalize` (V340).
