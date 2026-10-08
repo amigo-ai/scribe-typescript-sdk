@@ -520,7 +520,7 @@
         "type": "object"
       },
       "CarryForwardAvailableField": {
-        "description": "One AMD field with a value available to carry forward from the patient's last signed note\n(ehr-note-writeback phase 62).\n\nFLAG-ONLY: this surface names the field (+ its human label and the prior signed note the value would\ncarry from) so the web can badge \"carries forward from your last note\" while the clinician edits the\nnote — it NEVER carries the field's value. `source_note_id` is an id and `source_signed_at` a date, so\nno carried chart/patient content (PHI) crosses this API. Built at note read from the EHR\ncarry-forward fetch phase 60 already runs, keyed by the `amd_field_code` scribe maps note fields to.",
+        "description": "One AMD field with a value available to carry forward from the patient's last signed note\n(ehr-note-writeback phases 62 + 69).\n\nNames the field (+ its human label and the prior signed note the value carries from) AND the carried\ndisplay `value` itself, so the web can pre-fill the editing view with what the EHR would carry and let the\nclinician edit it (phase 70). Built at note read from the EHR carry-forward fetch phase 60 already runs,\nkeyed by the `amd_field_code` scribe maps note fields to.\n\nPHI: `value` is the carried chart/patient display content (reversal approved 2026-10-08). It is returned\nto the authenticated clinician like the note body, but must be masked on the web until the clinician opts\nin (phase 70) and must NEVER be logged — PHI-safe logging surfaces codes/counts only. `source_note_id`\n(an id) and `source_signed_at` (a date) are provenance, not PHI.",
         "properties": {
           "amd_field_code": {
             "maxLength": 256,
@@ -561,6 +561,18 @@
               }
             ],
             "title": "Source Signed At"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "maxLength": 100000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
           }
         },
         "required": [
@@ -1845,6 +1857,7 @@
       "FieldValueSource": {
         "enum": [
           "transcript",
+          "clinician_edit",
           "session_meta",
           "carried_forward",
           "amd_identity_autowrite"
@@ -1861,6 +1874,7 @@
       "FieldWritebackReason": {
         "enum": [
           "written_from_transcript",
+          "written_from_clinician_edit",
           "written_session_meta",
           "omitted_carried_forward",
           "omitted_identity_autowritten",
