@@ -65,14 +65,42 @@ another provider's session, asserted by the not-found cases.
 ## Zero-residue / test-data discipline
 
 - **Staging only**, workspace `f001e5c8`. Production untouched.
-- Every session is created with an `sdk-e2e-*` external id and is **never
-  streamed**, so it stays "dangling" and is auto-reaped by the phase-06 reaper.
+- Every session is created with an `sdk-e2e-*` external id and is **cancelled in
+  `afterAll`** via the provider-scoped client (`teardownSessions` in
+  `harness.ts` → `ScribeClient.cancelSession`). Cancel is the clean retirement:
+  it transitions the session to the terminal `cancelled` state so the backend's
+  **no-activity watchdog never reaps a never-streamed session as `failed`**. (On
+  a shared provider, un-torn-down sessions previously accumulated as failed —
+  ~114 observed on the staging `caly@amigo.ai` provider — because the watchdog
+  fails any session with no streaming activity ~5 min after creation.)
+- Teardown is **best-effort and idempotent**: an already-terminal session
+  (including a streamed+ended `in-review` one) returns `409` and a missing/
+  unowned id returns `404`; both are swallowed so `afterAll` never throws.
 - **No grants and no M2M clients are created** — the suites reuse the
   pre-provisioned persistent CI provider grant. `invalid_target` is driven with
   a throwaway `sdk-e2e-nogrant-*@example.com` (no grant, no side effect).
 - There is **no session-delete endpoint** (filed as an SDK/API follow-up), so
-  teardown records + logs the created ids rather than deleting them; residue
-  self-clears via the reaper.
+  teardown uses `cancelSession` (guarded → terminal `cancelled`) rather than a
+  hard delete. This requires only `scribe:sessions:write`, which the CI M2M
+  grant already has.
+
+## Use a dedicated test provider (do NOT share a human's account)
+
+Point the e2e at a **dedicated test provider**, never a real clinician's
+account. The provider is env-driven (`SCRIBE_E2E_PROVIDER_EMAIL` — a CI secret,
+and the local `.env`), so switching is a **config/ops change, not a code
+change**: set `SCRIBE_E2E_PROVIDER_EMAIL` to a dedicated email (e.g. a
+`scribe-e2e@…` service address).
+
+- **Prerequisite (out-of-band ops step):** that email must have an **active
+  `provider_access_grant` in workspace `f001e5c8`** for the CI provider-M2M
+  client. Without it, `beforeAll` fails loudly with `invalid_target` (the mint
+  cannot act-as an un-granted email). Provisioning the grant is a manual ops
+  task — it is **not** done by this suite (the suites create no grants).
+- Why it matters: even with the per-suite teardown above, running against a
+  shared human account means any transient teardown gap (a crashed run, a
+  network blip) leaves residue on that person's real session list. A dedicated
+  provider isolates e2e churn from real clinical data.
 
 ## Run locally
 

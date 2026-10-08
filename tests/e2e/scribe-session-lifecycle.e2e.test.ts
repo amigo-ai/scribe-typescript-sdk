@@ -41,7 +41,15 @@ import type {
   SummaryReadResponse,
   TranscriptResponse,
 } from '../../src'
-import { e2eExternalId, env, hasCreds, makeServerClient, sleep, synthPcm16 } from './harness'
+import {
+  e2eExternalId,
+  env,
+  hasCreds,
+  makeServerClient,
+  sleep,
+  synthPcm16,
+  teardownSessions,
+} from './harness'
 
 const hasWebSocket = typeof globalThis.WebSocket === 'function'
 
@@ -97,12 +105,14 @@ describe.runIf(hasCreds)('Scribe session lifecycle e2e (real happy-path artifact
     client = server.scribe(env.providerEmail!)
   }, 60_000)
 
-  afterAll(() => {
-    // eslint-disable-next-line no-console
-    console.warn(
-      `[lifecycle e2e] created ${createdSessionIds.length} sdk-e2e session(s) ` +
-        `(streamed + ended; no grants/M2M created): ${createdSessionIds.join(', ')}`
-    )
+  afterAll(async () => {
+    // Zero-residue: the lifecycle session is streamed + ended (→ in-review), but
+    // cancel it anyway so it reaches a terminal state and can never be reaped.
+    // Idempotent + best-effort: an already-terminal session returns 409 and is
+    // swallowed, so teardown never throws.
+    if (client) {
+      await teardownSessions(client, createdSessionIds, 'lifecycle e2e')
+    }
   })
 
   it('create → stream → generate checklist (x2) → end → generate note/summary → read artifacts', async () => {

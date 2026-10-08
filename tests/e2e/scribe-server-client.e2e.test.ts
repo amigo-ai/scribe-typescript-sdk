@@ -15,7 +15,7 @@
  * Zero-residue: reuses the pre-provisioned CI provider grant, creates no grants
  * or M2M clients, and only creates `sdk-e2e-*` sessions (auto-reaped).
  */
-import { beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { BadRequestError, ScribeError, ServiceUnavailableError } from '../../src'
 import type { ScribeServerClient, SessionResponse } from '../../src'
 import {
@@ -27,6 +27,7 @@ import {
   hasCreds,
   makeServerClient,
   noGrantEmail,
+  teardownSessions,
 } from './harness'
 
 describe.runIf(hasCreds)(
@@ -34,6 +35,11 @@ describe.runIf(hasCreds)(
   () => {
     let server: ScribeServerClient
     let session: SessionResponse
+    // Zero-residue: every session this suite creates (the shared `session` plus
+    // the per-test `allocate`/`prepare` targets) is tracked and cancelled in
+    // `afterAll`, so never-streamed sessions aren't reaped as "failed" on the
+    // shared provider.
+    const createdSessionIds: string[] = []
 
     beforeAll(async () => {
       server = makeServerClient()
@@ -55,8 +61,21 @@ describe.runIf(hasCreds)(
         visit_type: 'therapy-follow-up',
         metadata: { source: 'scribe-typescript-sdk server-client e2e' },
       })
+      createdSessionIds.push(session.id)
       expect(session.id).toBeTruthy()
     }, 60_000)
+
+    afterAll(async () => {
+      // Best-effort cancel of every created session via the provider-scoped
+      // client; swallows terminal/not-found rejections so teardown never throws.
+      if (server) {
+        await teardownSessions(
+          server.scribe(env.providerEmail!),
+          createdSessionIds,
+          'server-client e2e'
+        )
+      }
+    })
 
     // --- mintProviderToken (happy + shape) -----------------------------------
     it('mintProviderToken(granted email) → a non-empty provider JWT', async () => {
@@ -127,6 +146,7 @@ describe.runIf(hasCreds)(
         external_id: e2eExternalId('server-allocate'),
         visit_type: 'therapy-follow-up',
       })
+      createdSessionIds.push(target.id)
       try {
         const alloc = await server.allocate(env.providerEmail!, target.id)
         expect(typeof alloc.host).toBe('string')
@@ -199,6 +219,7 @@ describe.runIf(hasCreds)(
         external_id: e2eExternalId('server-prepare'),
         visit_type: 'therapy-follow-up',
       })
+      createdSessionIds.push(target.id)
       try {
         const conn = await server.prepareConnection(env.providerEmail!, target.id)
         expect(conn.sessionId).toBe(target.id)

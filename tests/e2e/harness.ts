@@ -201,6 +201,101 @@ export function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms))
 }
 
+// ---------------------------------------------------------------------------
+// Zero-residue teardown
+//
+// The e2e suites create ad-hoc `sdk-e2e-*` sessions. A never-streamed session
+// is failed by the backend's no-activity watchdog ~5 min later, so on a SHARED
+// provider those pile up as "failed" sessions (114 observed on the staging
+// `caly@amigo.ai` provider). To leave zero residue, every suite tracks the ids
+// it creates and cancels them in `afterAll` via the provider-scoped client.
+//
+// There is no session-delete endpoint; `cancelSession` (guarded → `cancelled`,
+// a terminal state) is the clean way to retire a session so the watchdog never
+// touches it. Teardown is BEST-EFFORT: a session that is already terminal
+// (`cancelled` / `completed` / `failed`, or a streamed+ended `in-review` that
+// can't transition) returns 409, and a missing/unowned id returns 404 — both
+// are swallowed so teardown is idempotent and NEVER fails the suite.
+// ---------------------------------------------------------------------------
+
+/** HTTP statuses that mean "already retired / nothing to cancel" — safely ignored. */
+const TEARDOWN_IGNORABLE_STATUSES = new Set([404, 409])
+
+/**
+ * Best-effort cancel of every session id, in order, via the provider-scoped
+ * `client`. Swallows terminal/not-found rejections (and logs anything else) so
+ * teardown is idempotent and never throws — it must never fail an `afterAll`.
+ */
+export async function teardownSessions(
+  client: ScribeClient,
+  sessionIds: Iterable<string>,
+  label: string
+): Promise<void> {
+  const ids = [...new Set(sessionIds)]
+  if (ids.length === 0) {
+    return
+  }
+  let cancelled = 0
+  let alreadyTerminal = 0
+  const failures: string[] = []
+  for (const id of ids) {
+    try {
+      await client.cancelSession(id)
+      cancelled += 1
+    } catch (err) {
+      const e = err as { statusCode?: number; errorCode?: string }
+      if (typeof e.statusCode === 'number' && TEARDOWN_IGNORABLE_STATUSES.has(e.statusCode)) {
+        // Already terminal (409) or gone/unowned (404) — nothing to do.
+        alreadyTerminal += 1
+        continue
+      }
+      // Any other error is non-fatal to teardown; record it for visibility.
+      failures.push(`${id} (${e.statusCode ?? 'n/a'} ${e.errorCode ?? 'error'})`)
+    }
+  }
+  // eslint-disable-next-line no-console
+  console.warn(
+    `[${label}] teardown: cancelled ${cancelled}/${ids.length} session(s) ` +
+      `(${alreadyTerminal} already terminal)` +
+      (failures.length > 0 ? `; could not cancel: ${failures.join(', ')}` : '')
+  )
+}
+
+/** Tracks created session ids and cancels them (best-effort) on teardown. */
+export interface SessionTracker {
+  /** Record a created session (returns it unchanged for inline chaining). */
+  track<T extends { id: string }>(session: T): T
+  /** Record a bare session id. */
+  add(id: string): void
+  /** All tracked ids (insertion order, de-duplicated). */
+  ids(): string[]
+  /** Best-effort `cancelSession` of every tracked id via `client`; never throws. */
+  teardown(client: ScribeClient): Promise<void>
+}
+
+/**
+ * Create a {@link SessionTracker} for a suite. `label` is used in the teardown
+ * log line so each suite's residue is attributable.
+ */
+export function createSessionTracker(label: string): SessionTracker {
+  const ids: string[] = []
+  return {
+    track(session) {
+      ids.push(session.id)
+      return session
+    },
+    add(id) {
+      ids.push(id)
+    },
+    ids() {
+      return [...ids]
+    },
+    teardown(client) {
+      return teardownSessions(client, ids, label)
+    },
+  }
+}
+
 /**
  * Generate a mono 16-bit PCM sine tone (16 kHz, 440 Hz, `durationMs` long) as one
  * little-endian `Uint8Array` — the same PCM16 shape a real recorder emits. Used
