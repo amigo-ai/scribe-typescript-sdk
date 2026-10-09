@@ -33,6 +33,8 @@ import type {
   ListSessionsParams,
   NoteGenerationResult,
   NoteReadResponse,
+  ProviderSettingsResponse,
+  ProviderSettingsUpdateRequest,
   RegenerateSectionRequest,
   SessionListResponse,
   SessionResponse,
@@ -504,6 +506,46 @@ export class ScribeClient {
   }
 
   /**
+   * Fetch the calling provider's saved settings (the default Zoom meeting link).
+   *
+   * `GET /v1/{workspace_id}/provider/settings` → 200. Requires
+   * `scribe:sessions:read_own` and a provider principal. Returns
+   * `{ zoom_meeting_link: null }` when nothing is saved; never 404.
+   */
+  async getProviderSettings(options?: CallOptions): Promise<ProviderSettingsResponse> {
+    const workspaceId = this.resolveWorkspaceId(options)
+    return this.http.request<ProviderSettingsResponse>({
+      method: 'GET',
+      path: `/v1/${workspaceId}/provider/settings`,
+      signal: options?.signal,
+      timeoutMs: options?.timeoutMs,
+    })
+  }
+
+  /**
+   * Save (upsert) or clear the calling provider's default Zoom meeting link.
+   *
+   * `PUT /v1/{workspace_id}/provider/settings` → 200 with the persisted
+   * settings. Requires `scribe:sessions:read_own` and a provider principal. A
+   * non-null `zoom_meeting_link` must be a `zoom.us` http(s) URL (same rule as
+   * {@link ScribeClient.createZoomSession}), else `422`; `null` clears it. The
+   * server stores the normalized URL, so read the link back from the response.
+   */
+  async updateProviderSettings(
+    input: ProviderSettingsUpdateRequest,
+    options?: CallOptions
+  ): Promise<ProviderSettingsResponse> {
+    const workspaceId = this.resolveWorkspaceId(options)
+    return this.http.request<ProviderSettingsResponse>({
+      method: 'PUT',
+      path: `/v1/${workspaceId}/provider/settings`,
+      body: input,
+      signal: options?.signal,
+      timeoutMs: options?.timeoutMs,
+    })
+  }
+
+  /**
    * Stream a session's Zoom lifecycle + transcript events over SSE.
    *
    * `GET /v1/{workspace_id}/sessions/{session_id}/events` — header-authenticated
@@ -643,10 +685,17 @@ export class ScribeClient {
    * Requires `scribe:notes:rw_own`. The body's `base_version` is the version
    * being finalized; a stale value returns `409 version_conflict`
    * ({@link ConflictError}). 404 if no note exists to finalize; a subsequent
-   * {@link ScribeClient.putNote} returns `409 invalid_session_state`. If the
-   * stored note is missing a required AMD/template field, finalize is rejected
-   * with `422` and `errorCode === 'finalize_validation_failed'`
-   * ({@link ValidationError}).
+   * {@link ScribeClient.putNote} returns `409 invalid_session_state`. Finalize
+   * does not validate note content: any stored note shape finalizes. An
+   * already-finalized note is an idempotent 200.
+   *
+   * With EHR writeback enabled for the workspace, the note is written back
+   * inside the same transaction. A writeback failure throws
+   * `errorCode === 'ehr_writeback_failed'` ({@link ServerError}: 500 when the
+   * request can't be built, 502 when the EHR call fails), rolls the finalize
+   * back (the note stays a draft), and names the cause in the body's
+   * `details` (`{ field: 'reason', message }`). On success the response
+   * carries `writeback_status` and per-field `field_dispositions`.
    */
   async finalizeNote(
     sessionId: string,

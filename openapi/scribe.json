@@ -4163,44 +4163,6 @@
   },
   "openapi": "3.1.0",
   "paths": {
-    "/health": {
-      "get": {
-        "operationId": "health-check",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": {
-                    "type": "string"
-                  },
-                  "title": "Response Health-Check",
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Health"
-      }
-    },
-    "/readiness": {
-      "get": {
-        "operationId": "readiness-check",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Readiness"
-      }
-    },
     "/v1/{workspace_id}/appointments": {
       "get": {
         "description": "List appointments over a rolling date-anchored window (workspace + provider read-scoped).\n\nPhase 38 ships a deliberate static stub sourced from the superscribe-web seed (see\n`src/appointments.py`); the response contract is stable so the source can later swap to a\ndownstream customer API via a managed External Integration without a wire change. TESTING STOPGAP\n(phase 45a, SUPERSEDED BY PHASE 45): the stub emits a rolling window `[today - back, today +\nforward]` (env-tunable, defaults 14/30 → 360 items max) instead of today-only, so date-pinned\nappointment ids stay in-list across day-rollovers and the phase-41 session join keeps linking a\nsession created on a prior day. Paginated to mirror the sibling `list-sessions` endpoint\n(offset-based `limit` + opaque `continuation_token`); consumers page the full window and bucket\ninto past/today/upcoming client-side.\n\nOptional date-range filter (phase 34): `start_after` (INCLUSIVE) and `start_before` (EXCLUSIVE) are\ntimezone-aware ISO-8601 datetime bounds on the appointment `start` (normalized to UTC; a naive,\ndate-only or malformed bound is a 422), forming the half-open window `[start_after, start_before)`.\nEither may be given alone; both omitted preserves the legacy behavior. The filter is applied\nserver-side over the window BEFORE pagination, so a client that needs only its today+tomorrow slice\nfetches exactly that instead of paging a wide window and filtering client-side. An inverted range or\na span wider than `_MAX_APPOINTMENT_RANGE` returns 400 `invalid_date_range`.\n\nEHR-backed workspaces (ehr-note-writeback phase 03 — the EHR-integrated workspace with its flag on)\nfetch exactly the client's window, so BOTH `start_after` and `start_before` are REQUIRED there\n(omitting either is 400 `invalid_date_range`); the window is never derived server-side.",
@@ -4325,7 +4287,7 @@
         },
         "summary": "List Appointments",
         "tags": [
-          "Scribe sessions"
+          "Appointments"
         ]
       }
     },
@@ -4429,7 +4391,7 @@
         },
         "summary": "Get Appointment",
         "tags": [
-          "Scribe sessions"
+          "Appointments"
         ]
       }
     },
@@ -4473,7 +4435,7 @@
         },
         "summary": "Get Provider Settings",
         "tags": [
-          "Scribe sessions"
+          "Provider settings"
         ]
       },
       "put": {
@@ -4525,7 +4487,7 @@
         },
         "summary": "Update Provider Settings",
         "tags": [
-          "Scribe sessions"
+          "Provider settings"
         ]
       }
     },
@@ -4672,7 +4634,7 @@
         },
         "summary": "List Sessions",
         "tags": [
-          "Scribe sessions"
+          "Sessions"
         ]
       },
       "post": {
@@ -4753,7 +4715,7 @@
         },
         "summary": "Create Session",
         "tags": [
-          "Scribe sessions"
+          "Sessions"
         ]
       }
     },
@@ -4856,7 +4818,7 @@
         },
         "summary": "Get Session",
         "tags": [
-          "Scribe sessions"
+          "Sessions"
         ]
       },
       "patch": {
@@ -4948,7 +4910,7 @@
         },
         "summary": "Update Session",
         "tags": [
-          "Scribe sessions"
+          "Sessions"
         ]
       }
     },
@@ -5052,7 +5014,7 @@
         },
         "summary": "Get Actions",
         "tags": [
-          "Scribe sessions"
+          "Note & artifacts"
         ]
       },
       "post": {
@@ -5172,7 +5134,7 @@
         },
         "summary": "Generate Actions",
         "tags": [
-          "Scribe sessions"
+          "Note & artifacts"
         ]
       }
     },
@@ -5284,7 +5246,7 @@
         },
         "summary": "Allocate Session",
         "tags": [
-          "Scribe sessions"
+          "Sessions"
         ]
       }
     },
@@ -5391,7 +5353,7 @@
         },
         "summary": "Ask Session",
         "tags": [
-          "Scribe sessions"
+          "Note & artifacts"
         ]
       }
     },
@@ -5485,7 +5447,7 @@
         },
         "summary": "Cancel Session",
         "tags": [
-          "Scribe sessions"
+          "Sessions"
         ]
       }
     },
@@ -5589,7 +5551,7 @@
         },
         "summary": "Get Checklist",
         "tags": [
-          "Scribe sessions"
+          "Note & artifacts"
         ]
       },
       "patch": {
@@ -5691,7 +5653,7 @@
         },
         "summary": "Update Checklist",
         "tags": [
-          "Scribe sessions"
+          "Note & artifacts"
         ]
       }
     },
@@ -5785,7 +5747,7 @@
         },
         "summary": "Auto Check Checklist",
         "tags": [
-          "Scribe sessions"
+          "Note & artifacts"
         ]
       }
     },
@@ -5889,7 +5851,7 @@
         },
         "summary": "Get Codes",
         "tags": [
-          "Scribe sessions"
+          "Note & artifacts"
         ]
       },
       "post": {
@@ -6009,7 +5971,7 @@
         },
         "summary": "Generate Codes",
         "tags": [
-          "Scribe sessions"
+          "Note & artifacts"
         ]
       }
     },
@@ -6113,7 +6075,7 @@
         },
         "summary": "Create Code",
         "tags": [
-          "Scribe sessions"
+          "Note & artifacts"
         ]
       }
     },
@@ -6227,7 +6189,7 @@
         },
         "summary": "Decide Code",
         "tags": [
-          "Scribe sessions"
+          "Note & artifacts"
         ]
       }
     },
@@ -6321,7 +6283,7 @@
         },
         "summary": "End Session",
         "tags": [
-          "Scribe sessions"
+          "Sessions"
         ]
       }
     },
@@ -6426,7 +6388,7 @@
         },
         "summary": "Stream Zoom Session Events",
         "tags": [
-          "Scribe sessions"
+          "Zoom"
         ]
       }
     },
@@ -6529,7 +6491,7 @@
         },
         "summary": "Get Note",
         "tags": [
-          "Scribe sessions"
+          "Note & artifacts"
         ]
       },
       "post": {
@@ -6658,7 +6620,7 @@
         },
         "summary": "Generate Note",
         "tags": [
-          "Scribe sessions"
+          "Note & artifacts"
         ]
       },
       "put": {
@@ -6760,7 +6722,7 @@
         },
         "summary": "Update Note",
         "tags": [
-          "Scribe sessions"
+          "Note & artifacts"
         ]
       }
     },
@@ -6884,7 +6846,7 @@
         },
         "summary": "Finalize Note",
         "tags": [
-          "Scribe sessions"
+          "Note & artifacts"
         ]
       }
     },
@@ -6988,7 +6950,7 @@
         },
         "summary": "Regenerate Note Section",
         "tags": [
-          "Scribe sessions"
+          "Note & artifacts"
         ]
       }
     },
@@ -7091,7 +7053,7 @@
         },
         "summary": "Get Summary",
         "tags": [
-          "Scribe sessions"
+          "Note & artifacts"
         ]
       },
       "post": {
@@ -7210,7 +7172,7 @@
         },
         "summary": "Generate Summary",
         "tags": [
-          "Scribe sessions"
+          "Note & artifacts"
         ]
       }
     },
@@ -7314,7 +7276,7 @@
         },
         "summary": "Mint Attach Ticket",
         "tags": [
-          "Scribe sessions"
+          "Sessions"
         ]
       }
     },
@@ -7417,7 +7379,7 @@
         },
         "summary": "Get Transcript",
         "tags": [
-          "Scribe sessions"
+          "Note & artifacts"
         ]
       }
     },
@@ -7511,7 +7473,7 @@
         },
         "summary": "End Zoom Session",
         "tags": [
-          "Scribe sessions"
+          "Zoom"
         ]
       }
     },
@@ -7615,7 +7577,7 @@
         },
         "summary": "Pause Zoom Bot",
         "tags": [
-          "Scribe sessions"
+          "Zoom"
         ]
       }
     },
@@ -7719,7 +7681,7 @@
         },
         "summary": "Resume Zoom Bot",
         "tags": [
-          "Scribe sessions"
+          "Zoom"
         ]
       }
     },
@@ -7776,7 +7738,7 @@
         },
         "summary": "Delete Zoom Connection",
         "tags": [
-          "Scribe sessions"
+          "Zoom"
         ]
       },
       "get": {
@@ -7838,7 +7800,7 @@
         },
         "summary": "Get Zoom Connection",
         "tags": [
-          "Scribe sessions"
+          "Zoom"
         ]
       }
     },
@@ -7923,7 +7885,7 @@
         },
         "summary": "Start Zoom Oauth",
         "tags": [
-          "Scribe sessions"
+          "Zoom"
         ]
       }
     },
@@ -7985,7 +7947,7 @@
         },
         "summary": "Complete Zoom Oauth",
         "tags": [
-          "Scribe sessions"
+          "Zoom"
         ]
       }
     },
@@ -8089,7 +8051,7 @@
         },
         "summary": "Create Zoom Session",
         "tags": [
-          "Scribe sessions"
+          "Zoom"
         ]
       }
     }

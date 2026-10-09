@@ -111,6 +111,7 @@ const STATUS_ERROR_MAP: Record<number, typeof ScribeError> = {
   422: ValidationError,
   429: RateLimitError,
   500: ServerError,
+  502: ServerError,
   503: ServiceUnavailableError,
 }
 
