@@ -31,12 +31,17 @@ Appointments (read-only; each carries a nested `session` object):
 - `listAppointments` — `GET /v1/{workspace_id}/appointments` (cursor-paginated: `limit`, `continuation_token`)
 - `getAppointment` — `GET /v1/{workspace_id}/appointments/{appointment_id}`
 
+Provider settings (the calling provider's own; provider principals only):
+
+- `getProviderSettings` — `GET /v1/{workspace_id}/provider/settings` → `{ zoom_meeting_link }` (`null` when unset, never 404)
+- `updateProviderSettings` — `PUT /v1/{workspace_id}/provider/settings` (`{ zoom_meeting_link }`; a `zoom.us` link sets it, `null` clears it)
+
 Artifacts (note / summary / checklist / codes):
 
 - `getNote` — `GET /v1/{workspace_id}/sessions/{session_id}/note`
 - `generateNote` — `POST /v1/{workspace_id}/sessions/{session_id}/note` (pass a `note_type` `NoteTemplate`; `amd-*` templates emit the `StructuredNote` envelope, `structured` populated / `body` null)
 - `putNote` — `PUT /v1/{workspace_id}/sessions/{session_id}/note` — versioned autosave; send the full `StructuredNote` envelope in `structured` + `base_version` (complete-document replacement). Stale `base_version` → `409 version_conflict`, post-finalize → `409 invalid_session_state`
-- `finalizeNote` — `POST /v1/{workspace_id}/sessions/{session_id}/note/finalize` (send the reviewed note's `base_version`; stale versions conflict and missing required template fields fail validation)
+- `finalizeNote` — `POST /v1/{workspace_id}/sessions/{session_id}/note/finalize` (send the reviewed note's `base_version`; stale versions conflict; no content validation. With EHR writeback on, the note is written back in the same transaction and a failure rolls the finalize back with `ehr_writeback_failed`)
 - `getSummary` — `GET /v1/{workspace_id}/sessions/{session_id}/summary`
 - `generateSummary` — `POST /v1/{workspace_id}/sessions/{session_id}/summary`
 - `getChecklist` — `GET /v1/{workspace_id}/sessions/{session_id}/checklist`
@@ -266,7 +271,7 @@ Lower-level building blocks are exported too: `floatToPcm16`, `STT_SAMPLE_RATE`,
 Non-2xx responses throw typed errors (all extend `ScribeError`):
 `BadRequestError` (400), `AuthenticationError` (401), `PermissionError` (403),
 `NotFoundError` (404), `ConflictError` (409), `ValidationError` (422),
-`RateLimitError` (429), `ServerError` (500), `ServiceUnavailableError` (503,
+`RateLimitError` (429), `ServerError` (500, 502), `ServiceUnavailableError` (503,
 with `retryAfterSeconds`). Transport failures throw `NetworkError`.
 
 Machine-readable domain error codes are surfaced on `ScribeError.errorCode`.
@@ -274,8 +279,12 @@ Structured-note codes: `version_conflict` / `invalid_session_state` (409),
 `unsupported_note_template` (unknown/mismatched pinned template),
 `note_template_required` (session create/patch with no resolvable `visit_type`),
 `validation_error` (structured document failed template validation, per-field
-`details`), and `finalize_validation_failed` (finalize with a required
-AMD/template field missing) — all `422`. Async structured generation that fails
+`details`) — all `422`. Finalize does not validate note content. EHR writeback
+failures on finalize are `ehr_writeback_failed` (`ServerError`: 500 when the
+request can't be built, 502 when the EHR call fails). The finalize is rolled
+back and `details` names the reason (`provider_email_missing`,
+`appointment_link_missing`, `unsupported_note`, `ehr_rejected`,
+`ehr_unavailable`, `chart_note_failed`, `chart_note_not_written`). Async structured generation that fails
 validation after a bounded repair leaves the note `generation_status === 'failed'`
 with an `error` (`ErrorDetail`) describing the `structured_generation_invalid`
 failure.

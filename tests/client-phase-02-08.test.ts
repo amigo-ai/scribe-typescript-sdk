@@ -6,7 +6,13 @@
  */
 import { describe, expect, it } from 'vitest'
 import { ScribeClient } from '../src/client'
-import { ConfigurationError, ConflictError, NotFoundError, TimeoutError } from '../src/errors'
+import {
+  ConfigurationError,
+  ConflictError,
+  NotFoundError,
+  ServerError,
+  TimeoutError,
+} from '../src/errors'
 import { isGenerationEnqueued } from '../src/types'
 import { mockFetch } from './test-helpers'
 
@@ -171,6 +177,33 @@ describe('getZoomConnection / disconnectZoom / authorizeZoomOAuth', () => {
     expect(result).toEqual(body)
     expect(calls[0]!.url).toBe(`${BASE}/v1/${WS}/zoom/oauth/authorize`)
     expect(calls[0]!.init?.method).toBe('POST')
+  })
+})
+
+describe('getProviderSettings / updateProviderSettings', () => {
+  it('GETs the provider settings', async () => {
+    const body = { zoom_meeting_link: null }
+    const { fetch, calls } = mockFetch([{ status: 200, body }])
+    const result = await client(fetch).getProviderSettings()
+    expect(result).toEqual(body)
+    expect(calls[0]!.url).toBe(`${BASE}/v1/${WS}/provider/settings`)
+    expect(calls[0]!.init?.method).toBe('GET')
+  })
+
+  it('PUTs the meeting link and returns the persisted settings', async () => {
+    const body = { zoom_meeting_link: 'https://zoom.us/j/123' }
+    const { fetch, calls } = mockFetch([{ status: 200, body }])
+    const result = await client(fetch).updateProviderSettings(body)
+    expect(result).toEqual(body)
+    expect(calls[0]!.url).toBe(`${BASE}/v1/${WS}/provider/settings`)
+    expect(calls[0]!.init?.method).toBe('PUT')
+    expect(JSON.parse(String(calls[0]!.init?.body))).toEqual(body)
+  })
+
+  it('PUTs an explicit null to clear the link', async () => {
+    const { fetch, calls } = mockFetch([{ status: 200, body: { zoom_meeting_link: null } }])
+    await client(fetch).updateProviderSettings({ zoom_meeting_link: null })
+    expect(JSON.parse(String(calls[0]!.init?.body))).toEqual({ zoom_meeting_link: null })
   })
 })
 
@@ -437,5 +470,24 @@ describe('async token provider (smoke)', () => {
     expect(c).toBeInstanceOf(ScribeClient)
     await expect(c.getSession('sess-1')).resolves.toBeTruthy()
     expect(calls).toBe(1)
+  })
+})
+
+describe('finalizeNote EHR writeback failure', () => {
+  it('maps a 502 ehr_writeback_failed to ServerError with the reason in the body', async () => {
+    const body = {
+      code: 'ehr_writeback_failed',
+      message: 'The note could not be written back to the EHR',
+      correlation_id: 'corr-1',
+      details: [{ field: 'reason', message: 'ehr_unavailable' }],
+    }
+    const { fetch } = mockFetch([{ status: 502, body }])
+    const err = await client(fetch)
+      .finalizeNote('sess-1', { base_version: 2 })
+      .catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(ServerError)
+    expect((err as ServerError).statusCode).toBe(502)
+    expect((err as ServerError).errorCode).toBe('ehr_writeback_failed')
+    expect((err as ServerError).context).toEqual({ body })
   })
 })

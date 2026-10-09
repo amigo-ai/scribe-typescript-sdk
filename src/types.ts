@@ -251,9 +251,15 @@ export type NoteGenerationReadStatus = Schemas['NoteGenerationReadStatus']
  * EHR note-writeback state (`WritebackStatus`) reported on
  * {@link FinalizeNoteResponse} and {@link NoteReadResponse} as `writeback_status`:
  * - `succeeded` — the note was written back to the EHR.
- * - `pending` — writeback is in progress / enqueued.
- * - `disabled` — writeback is not enabled for this session/workspace.
- * - `not_attempted` — no writeback has been attempted (e.g. note not finalized).
+ * - `pending` — writeback is enabled for the workspace and the note is not
+ *   finalized yet; it is written back when {@link ScribeClient.finalizeNote}
+ *   succeeds. Finalize writes back synchronously, so nothing is ever queued.
+ * - `disabled` — writeback is off for the workspace; the note is never written back.
+ * - `not_attempted` — writeback is enabled, but the note was already finalized
+ *   (or the session ended with no note) without a writeback, e.g. before the
+ *   flag was on. It is not written back retroactively.
+ *
+ * To ask "was it written back?", check `=== 'succeeded'`.
  */
 export type WritebackStatus = Schemas['WritebackStatus']
 
@@ -322,6 +328,39 @@ export function isGenerationEnqueued(
  * the {@link WritebackStatus} (`writeback_status`) for the note's EHR writeback.
  */
 export type NoteReadResponse = Schemas['NoteReadResponse']
+
+/**
+ * One AMD field with a value the EHR would carry forward from the patient's
+ * last signed note (`CarryForwardAvailableField`), listed on
+ * {@link NoteReadResponse} as `carry_forward_available`. Populated only on a
+ * ready note for a writeback-enabled session with a linked EHR appointment;
+ * empty otherwise.
+ *
+ * PHI: `value` is the carried chart content. Mask it in the UI until the
+ * clinician opts in, and never log it. `source_note_id` and
+ * `source_signed_at` are provenance, not PHI.
+ */
+export type CarryForwardAvailableField = Schemas['CarryForwardAvailableField']
+
+/**
+ * What a finalize writeback did with one AMD field (`NoteFieldDisposition`),
+ * listed on {@link FinalizeNoteResponse} as `field_dispositions`. `disposition`
+ * is the outcome, `reason` says why, and `source` says where the value came
+ * from. `display_value` is PHI: never log it.
+ */
+export type NoteFieldDisposition = Schemas['NoteFieldDisposition']
+
+/** Coarse writeback outcome for one field: `written` or `omitted`. */
+export type FieldWritebackDisposition = Schemas['FieldWritebackDisposition']
+
+/**
+ * Why a field was written or omitted. `written_from_clinician_edit` means the
+ * clinician's edit was sent even though the EHR had a carry-forward value.
+ */
+export type FieldWritebackReason = Schemas['FieldWritebackReason']
+
+/** Where a field's written value came from (`FieldValueSource`). */
+export type FieldValueSource = Schemas['FieldValueSource']
 
 /** Reload-safe summary poller (`SummaryReadResponse`) — carries `generation_status`. */
 export type SummaryReadResponse = Schemas['SummaryReadResponse']
@@ -470,6 +509,22 @@ export type ZoomConnectionResponse = Schemas['ZoomConnectionResponse']
 
 /** Response from {@link ScribeClient.authorizeZoomOAuth} (`ZoomAuthorizeResponse`) — the `authorize_url` to navigate to. */
 export type ZoomAuthorizeResponse = Schemas['ZoomAuthorizeResponse']
+
+/**
+ * The calling provider's saved settings (`ProviderSettingsResponse`), returned
+ * by {@link ScribeClient.getProviderSettings} and
+ * {@link ScribeClient.updateProviderSettings}. `zoom_meeting_link` is the
+ * default Zoom meeting link; `null` means none is saved. It is independent of
+ * the Zoom OAuth connection.
+ */
+export type ProviderSettingsResponse = Schemas['ProviderSettingsResponse']
+
+/**
+ * Body of {@link ScribeClient.updateProviderSettings}
+ * (`ProviderSettingsUpdateRequest`). A `zoom.us` http(s) link sets the default;
+ * `null` clears it.
+ */
+export type ProviderSettingsUpdateRequest = Schemas['ProviderSettingsUpdateRequest']
 
 /* --- Zoom event stream (phase 06) --- */
 

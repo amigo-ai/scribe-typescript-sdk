@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `getProviderSettings` / `updateProviderSettings` for
+  `GET`/`PUT /v1/{workspace_id}/provider/settings` (the provider's default Zoom
+  meeting link), with `ProviderSettingsResponse` and
+  `ProviderSettingsUpdateRequest`.
+- Named types `CarryForwardAvailableField`, `NoteFieldDisposition`,
+  `FieldWritebackDisposition`, `FieldWritebackReason` and `FieldValueSource`,
+  with PHI notes on `value` / `display_value`.
+
+### Fixed
+
+- HTTP 502 now throws `ServerError` instead of a bare `ScribeError`
+  (finalize `ehr_writeback_failed`, Zoom pause/resume `bot_command_failed`).
+- `finalizeNote` docs no longer promise a `422 finalize_validation_failed`; the
+  API removed that check. They now describe the EHR writeback and its rollback.
+- `WritebackStatus` docs match the API: `pending` means not finalized yet,
+  `not_attempted` means finalized without a writeback.
+- `openapi/scribe.json` re-synced from the Scribe service: drops `/health` and
+  `/readiness`, and picks up the per-area operation tags.
+
 ### Changed
 
 - **Breaking:** `createSession` (and `ServerScribeClient.createSession`) now
